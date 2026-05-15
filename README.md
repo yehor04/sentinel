@@ -6,6 +6,8 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Status](https://img.shields.io/badge/status-WIP%20hackathon-orange.svg)](#)
 
+**Live demo:** https://sentinel.66-245-207-218.nip.io · [/health](https://sentinel.66-245-207-218.nip.io/health)
+
 ## The problem
 
 Modern reasoning-enhanced LLM agents hallucinate tools they don't have. The 2026 literature confirms this is getting **worse, not better**:

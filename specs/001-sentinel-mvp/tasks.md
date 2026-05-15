@@ -30,22 +30,28 @@ description: "6-day build sprint task list for Sentinel MVP"
 
 **Purpose**: Prove every leg of the architecture works before writing any detection logic. Constitution Principle IV (Demo-First) is the gate.
 
-- [x] **T001** [US1] Create project directory structure per plan.md (already done in scaffolding step)
-- [x] **T002** [US1] Initialize spec-kit, write constitution.md, CLAUDE.md, blueprint.md (done)
-- [ ] **T003** [P] [US1] Create `backend/pyproject.toml` declaring deps: fastapi, uvicorn, pydantic>=2, httpx, structlog, sqlite-utils, rapidfuzz, google-generativeai, openai (for Featherless compat); python-version 3.11
-- [ ] **T004** [P] [US1] Create `backend/app/main.py` — FastAPI app with placeholder POST /detect, GET /health, GET /events (SSE stub). Returns mocked `Decision`.
-- [ ] **T005** [P] [US1] Create `sentinel-hook.py` at repo root — zero-dependency, 50-line, reads stdin JSON, POSTs to localhost:7777/detect, translates verdict → exit code
-- [ ] **T006** [P] [US1] Create `deploy/docker-compose.yml` and `deploy/Dockerfile.backend` — single container running uvicorn on :7777
-- [ ] **T007** [P] [US1] Create `deploy/Caddyfile` — reverse proxy with auto-TLS for sentinel.<domain>
-- [ ] **T008** [US1] Create `Makefile` with targets: `install`, `dev`, `demo`, `test`, `bench`, `deploy-vultr`, `smoke-vultr` (stubs that print plan, fail loud where unimplemented)
-- [ ] **T009** [US1] Create `.gitignore`, `.env.example`, `LICENSE` (Apache 2.0), `README.md` (stub with project tagline)
-- [ ] **T010** [US1] Initialize git repo, first commit "scaffold + constitution v1.0.0"
-- [ ] **T011** [US1] Verify local daemon roundtrip: `make dev` → POST /detect with sample → JSON response → hook script exit codes correct
-- [ ] **T012** [US1] Acquire Vultr API access, provision 1-vCPU 2GB VM in Frankfurt, get IP, configure DNS for `sentinel.<your-domain>`
-- [ ] **T013** [US1] First deploy to Vultr: `docker-compose up -d` on the VM, Caddy gets TLS cert, public URL returns 200 on GET /health. **DAY 1 CHECKPOINT** — pipeline cleared.
-- [ ] **T014** [P] [US1] Day 1 bait verification: hand-craft 3 prompts; test against Claude Sonnet 4.6 (your current session); record which reliably produce phantom tool calls. Pass criterion: ≥1 prompt triggers phantoms in 4/5 attempts.
+- [x] **T001** [US1] Create project directory structure per plan.md
+- [x] **T002** [US1] Initialize spec-kit, write constitution.md, CLAUDE.md, blueprint.md
+- [x] **T003** [P] [US1] Create `backend/pyproject.toml` declaring deps: fastapi, uvicorn, pydantic>=2, httpx, structlog, sqlite-utils, rapidfuzz, google-generativeai, openai (for Featherless compat); python-version 3.11
+- [x] **T004** [P] [US1] Create `backend/app/main.py` — FastAPI app with placeholder POST /detect, GET /health, GET /events (SSE stub). Returns mocked `Decision`.
+- [x] **T005** [P] [US1] Create `sentinel-hook.py` at repo root — zero-dependency, 100-line, reads stdin JSON, POSTs to localhost:7777/detect, translates verdict → exit code
+- [x] **T006** [P] [US1] Create `deploy/docker-compose.yml` and `deploy/Dockerfile.backend` — single container running uvicorn on :7777
+- [x] **T007** [P] [US1] Create `deploy/Caddyfile` — reverse proxy with auto-TLS for sentinel.<domain> (rewritten Day 1 evening to use explicit `handle` blocks after directive-order trap)
+- [x] **T008** [US1] Create `Makefile` with targets: `install`, `dev`, `demo`, `test`, `bench`, `deploy-vultr`, `smoke-vultr`
+- [x] **T009** [US1] Create `.gitignore`, `.env.example`, `LICENSE` (Apache 2.0), `README.md`
+- [x] **T010** [US1] Initialize git repo, two commits on `main`
+- [x] **T011** [US1] Verify local daemon roundtrip: `make dev` → POST /detect → JSON response → hook script exit codes verified (exit 2 with daemon up + AUTO_CORRECT; exit 0 fail-open with daemon down)
+- [x] **T012** [US1] Provision Vultr VM `vx1-g-2c-8g` in Milan (66.245.207.218), 50GB Ubuntu 24.04 bootable volume, SSH key + firewall group attached
+- [x] **T013** [US1] First deploy to Vultr live at **https://sentinel.66-245-207-218.nip.io** — Let's Encrypt cert, `/health` 200 OK, `/detect` returns AUTO_CORRECT JSON. **DAY 1 CHECKPOINT GREEN — 2026-05-15 ✅**
+- [ ] **T014** [P] [US1] Day 1 bait verification: hand-craft 3 prompts; test against Claude Sonnet 4.6 in a fresh project; record which reliably produce phantom tool calls. Pass criterion: ≥1 prompt triggers phantoms in 4/5 attempts. **DEFERRED to Day 2 morning**.
 
-**Checkpoint**: Public URL works. Hook + daemon + agent loop end-to-end with mocked decision. Bait prompts validated.
+**Checkpoint**: ✅ Public URL works. Hook + daemon + Caddy + TLS end-to-end. Bait verification deferred.
+
+**Day 1 retro (for the record):**
+- Vultr UX trap: SSH keys + firewall groups must exist as account-level resources before the deploy wizard's dropdowns will populate them. Cost ~1h of UI confusion.
+- Cloud-init YAML: `runcmd` block silently skipped when `package_upgrade: true` exceeds default timeout. Fix: install Docker + UFW rules manually post-SSH; future deploys should set `package_upgrade: false`.
+- `sslip.io` is Let's Encrypt rate-limited (250k/week burned by other users). Fix: swap to `nip.io`.
+- Caddyfile v2 directive order: bare `reverse_proxy /path upstream` directives lose to a bare `respond` catch-all. Fix: wrap every proxy in `handle /path { ... }`.
 
 ---
 

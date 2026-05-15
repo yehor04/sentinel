@@ -137,11 +137,31 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 ## Sprint state (current)
 
 **Hackathon:** AI Agent Olympics, Milan AI Week 2026
-**Window:** 2026-05-13 → 2026-05-20 (7 days; today is Day 2)
-**Submission deadline:** 2026-05-20
+**Window:** 2026-05-13 → 2026-05-20 (8 calendar days; today is 2026-05-15)
+**Submission deadline:** 2026-05-20 20:00 CET (submit 8h before as buffer)
 **Mode:** Solo developer
 **Stack lock-in date:** 2026-05-14
 **Constitution version:** 1.0.0
+
+### Day-by-day status
+
+| Day | Date | Status | Outcome |
+|---|---|---|---|
+| Day 1 | 2026-05-13 → 05-15 | ✅ Done | Scaffold + Vultr deploy live at https://sentinel.66-245-207-218.nip.io |
+| Day 2 | 2026-05-16 (next) | ⏳ Pending | Schemas + Layer 1 + heuristics (T015–T025) + bait verification (T014) |
+| Day 3 | 2026-05-17 | ⏳ Pending | Layer 2 + Layer 3 + latency gate (T026–T036) |
+| Day 4 | 2026-05-18 | ⏳ Pending | Dashboard + benchmark + Pareto chart (T037–T050) |
+| Day 5 | 2026-05-19 | ⏳ Pending | Hardening + demo prep + (stretch) MCP middleware (T051–T060) |
+| Day 6 | 2026-05-20 | ⏳ Pending | Demo video + submit (T061–T066) |
+
+### Production deployment
+
+- **Public URL:** https://sentinel.66-245-207-218.nip.io
+- **VM:** Vultr Milan, vx1-g-2c-8g, 66.245.207.218, root SSH via `~/.ssh/sentinel_vultr`
+- **TLS:** Let's Encrypt via Caddy auto-ACME
+- **Code on VM:** `/opt/sentinel/` (rsync'd from local), `.env` populated
+- **Containers:** `sentinel-backend` (FastAPI mocked) + `sentinel-caddy` (reverse proxy)
+- **Persistence:** `/var/sentinel/sentinel.db` (SQLite, schema TBD Day 2)
 
 ## Glossary
 
