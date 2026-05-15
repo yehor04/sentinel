@@ -1,0 +1,33 @@
+# Caddy reverse proxy for Sentinel — auto-TLS via Let's Encrypt.
+# Set SENTINEL_DOMAIN env var to your fully-qualified domain.
+
+{$SENTINEL_DOMAIN} {
+    # API surface — daemon
+    handle /health         { reverse_proxy backend:7777 }
+    handle /detect         { reverse_proxy backend:7777 }
+    handle /events         {
+        reverse_proxy backend:7777 {
+            transport http {
+                read_buffer 4KB
+                flush_interval -1     # SSE — disable buffering
+            }
+        }
+    }
+    handle /api/*          { reverse_proxy backend:7777 }
+
+    # Dashboard (Day 4) — frontend container served at root
+    handle {
+        # Until frontend container is built, return a minimal page to confirm pipeline
+        respond "Sentinel is live. Dashboard ships Day 4. See https://github.com/<owner>/sentinel" 200
+        # When frontend is enabled in docker-compose, swap to:
+        # reverse_proxy frontend:3000
+    }
+
+    encode gzip zstd
+
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}

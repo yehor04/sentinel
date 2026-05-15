@@ -1,0 +1,68 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    container_name: sentinel-backend
+    restart: unless-stopped
+    environment:
+      - SENTINEL_PORT=7777
+      - SENTINEL_DB_PATH=/var/sentinel/sentinel.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - FEATHERLESS_API_KEY=${FEATHERLESS_API_KEY}
+    volumes:
+      - sentinel-data:/var/sentinel
+    expose:
+      - "7777"
+    networks:
+      - sentinel-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:7777/health',timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Frontend dashboard — Day 4 ships this. Day 1 leaves it commented so the
+  # backend can deploy alone for the pipeline-clear smoke test.
+  # frontend:
+  #   build:
+  #     context: ..
+  #     dockerfile: deploy/Dockerfile.frontend
+  #   container_name: sentinel-frontend
+  #   restart: unless-stopped
+  #   environment:
+  #     - NEXT_PUBLIC_SENTINEL_API=https://${SENTINEL_DOMAIN}
+  #   expose:
+  #     - "3000"
+  #   networks:
+  #     - sentinel-net
+  #   depends_on:
+  #     - backend
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sentinel-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - SENTINEL_DOMAIN=${SENTINEL_DOMAIN}
+    networks:
+      - sentinel-net
+    depends_on:
+      - backend
+
+networks:
+  sentinel-net:
+    driver: bridge
+
+volumes:
+  sentinel-data:
+  caddy-data:
+  caddy-config:

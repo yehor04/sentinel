@@ -1,0 +1,52 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# --- Node / frontend ---
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# --- Sentinel runtime ---
+~/.sentinel/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# --- Build artefacts ---
+dist/
+build/
+
+# --- Benchmarks (keep .gitkeep, drop large outputs) ---
+results/*
+!results/.gitkeep
+
+# --- Caddy / deploy local state ---
+deploy/caddy-data/
+deploy/caddy-config/
+
+# --- Claude Code agent folder (per spec-kit security note) ---
+.claude/.credentials

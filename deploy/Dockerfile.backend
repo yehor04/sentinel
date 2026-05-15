@@ -1,0 +1,43 @@
+# Multi-stage build for the Sentinel FastAPI daemon. Targets a 1-vCPU 2GB
+# Vultr instance; image stays under ~250MB.
+
+FROM python:3.11-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /build
+
+COPY backend/pyproject.toml ./
+COPY backend/ ./backend/
+
+RUN pip install --upgrade pip && \
+    pip install --prefix=/install ".[server]" 2>/dev/null || pip install --prefix=/install \
+        fastapi==0.115.* uvicorn[standard]==0.32.* pydantic==2.* httpx==0.27.*
+
+# ---
+
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/install/bin:$PATH" \
+    PYTHONPATH="/install/lib/python3.11/site-packages"
+
+WORKDIR /app
+
+COPY --from=builder /install /install
+COPY backend/ ./backend/
+
+RUN mkdir -p /var/sentinel && \
+    addgroup --system sentinel && \
+    adduser --system --ingroup sentinel sentinel && \
+    chown -R sentinel:sentinel /var/sentinel /app
+
+USER sentinel
+
+EXPOSE 7777
+
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "7777", "--workers", "1"]

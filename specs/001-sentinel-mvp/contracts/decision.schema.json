@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sentinel/sentinel/specs/001-sentinel-mvp/contracts/decision.schema.json",
+  "title": "Sentinel Decision",
+  "description": "The output of the 3-layer cascade for a single tool-call interception. Authoritative interface between daemon, hook, dashboard, and benchmark. Constitutional NON-NEGOTIABLE: every Decision MUST populate verdict, confidence, and reason.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "confidence", "reason", "layer_breakdown"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["ALLOW", "AUTO_CORRECT", "SUGGEST", "BLOCK"],
+      "description": "Cascade decision. ALLOW = tool exists, pass through. AUTO_CORRECT = high-confidence replacement (>=0.85). SUGGEST = ambiguous, return candidates. BLOCK = no good candidate."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Final cascade confidence in [0, 1]. Constitution constraint: AUTO_CORRECT requires confidence >= 0.85."
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "description": "Human-readable explanation. Returned verbatim to the agent via stderr on BLOCK/AUTO_CORRECT/SUGGEST. Format as actionable retry instruction."
+    },
+    "suggestion": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tool_name", "rationale"],
+          "properties": {
+            "tool_name": { "type": "string", "minLength": 1 },
+            "rationale": { "type": "string", "maxLength": 240 }
+          }
+        }
+      ],
+      "description": "Replacement tool when verdict is AUTO_CORRECT or SUGGEST. Null for ALLOW or BLOCK."
+    },
+    "layer_breakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["l1_ms", "l2_ms"],
+      "properties": {
+        "l1_ms": { "type": "number", "minimum": 0.0, "description": "Layer 1 wall-clock ms" },
+        "l2_ms": { "type": "number", "minimum": 0.0, "description": "Layer 2 wall-clock ms" },
+        "l3_ms": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "number", "minimum": 0.0 }
+          ],
+          "description": "Layer 3 wall-clock ms (null when L3 did not fire)"
+        }
+      }
+    },
+    "degraded": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when a downstream call (L3 timeout, embedding 503) forced a fallback path."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "verdict": { "const": "AUTO_CORRECT" } } },
+      "then": {
+        "required": ["suggestion"],
+        "properties": {
+          "suggestion": { "type": "object" },
+          "confidence": { "minimum": 0.85 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "verdict": { "const": "BLOCK" } } },
+      "then": {
+        "properties": {
+          "reason": { "minLength": 10 }
+        }
+      }
+    }
+  ]
+}
