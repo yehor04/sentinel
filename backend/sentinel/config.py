@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -85,6 +86,19 @@ class LatencyBudget(BaseModel):
     l3_p95_ms: float = Field(gt=0.0, default=500.0)
 
 
+class EmbeddingConfig(BaseModel):
+    """Layer-2 embedding backend selection + cache + timeouts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: Literal["featherless", "gemini", "stub"] = "featherless"
+    featherless_model: str = "BAAI/bge-small-en-v1.5"
+    gemini_model: str = "text-embedding-004"
+    cache_dir: str = "~/.sentinel/embed-cache"
+    cache_size_mb: int = Field(gt=0, default=512)
+    timeout_s: float = Field(gt=0.0, default=5.0)
+
+
 class CascadeConfig(BaseModel):
     """Top-level cascade config; mirrors configs/cascade.yaml structure."""
 
@@ -93,6 +107,7 @@ class CascadeConfig(BaseModel):
     verdict_thresholds: VerdictThresholds = Field(default_factory=VerdictThresholds)
     fusion: FusionWeights = Field(default_factory=FusionWeights)
     latency: LatencyBudget = Field(default_factory=LatencyBudget)
+    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
 
 
 # ----------------------------------------------------------------------------

@@ -141,6 +141,12 @@ description: "6-day build sprint task list for Sentinel MVP"
 - [ ] **T055** [P] [US1] Write `docs/ARCHITECTURE.md` — diagram (mermaid), one paragraph per layer, link to blueprint.md
 - [ ] **T056** [P] [US3] Mining experiment E5: scan `~/.claude/projects/*/` for own session traces; extract tool calls; manually label phantoms; run cascade; produce mini-chart for demo video
 - [ ] **T057** [P] [US1] **Stretch**: MCP middleware (`backend/sentinel/mcp_proxy.py`) — accepts MCP `tools/call` JSON-RPC, runs cascade, forwards or rejects. Defer if Day 5 morning behind schedule.
+- [ ] **T057b** [US1] **Multi-agent / swarm demo scenario** — Sentinel architecture is already swarm-ready (stateless `/detect`, per-session traceability, O(1) Layer 1). Day 5 hardens for fleet load:
+  - Bump `uvicorn --workers` from 1 to `min(4, cpu_count())` so a 20-agent fanout doesn't queue on Layer 3.
+  - Document `DetectRequest.registry` override pattern (already schema-supported) so per-agent registries work when fleets have heterogeneous tool sets.
+  - Demo bait: 5-agent fleet (mix of Sonnet + Llama-3.1-8B-Instruct) all hitting the same daemon, intercept counter visibly ticking up in the dashboard.
+  - **Roadmap (post-hackathon, v2):** namespace-aware union registries for *coordinator-dispatching-to-specialists* swarm patterns where agent A legitimately calls a tool that lives in agent B's space — today Sentinel would flag this as a phantom. Calls for a "registry namespaces" extension to the schema.
+  - **Why this matters for the demo:** the user asked "if I run 20 agents on a cheap model, will Sentinel catch the hallucinations?" The answer is yes — with the published 99.7% phantom rate on Llama-3.1-8B in distractor-tool conditions, a 20-agent fleet generates ~960 phantoms/hour. The fleet narrative is a stronger demo than a single agent failing because the intercept counter climbs visibly in real time. See CLAUDE.md "Swarm / multi-agent scope" for full math.
 - [ ] **T058** [US4] Write `install.sh` — curl-bash one-liner: copies hook to ~/.local/bin, patches `~/.claude/settings.json`, sets up launchd/systemd service. Optional polish.
 - [ ] **T059** [US1] README rewrite: tagline, problem statement, install, demo GIF, benchmark table, sponsor acknowledgments, citation list
 - [ ] **T060** [US1] Smoke test: clean macOS VM clone, `git clone && make demo` works inside 5 minutes

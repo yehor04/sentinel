@@ -38,3 +38,24 @@ latency:
   l1_p95_ms: 2.0
   l2_p95_ms: 20.0
   l3_p95_ms: 500.0
+
+embedding:
+  # Layer 2 embedding backend. 'featherless' uses an OpenAI-compatible
+  # /v1/embeddings endpoint. 'gemini' uses Google's text-embedding-004.
+  # 'stub' is for tests — deterministic hash-based pseudo-embedding, no I/O.
+  provider: featherless
+
+  # Featherless: small fast open-source model, 384-dim. The bge-small family
+  # is the canonical small-embedding choice and Featherless serves it.
+  featherless_model: BAAI/bge-small-en-v1.5
+
+  # Gemini fallback (if FEATHERLESS_API_KEY missing or Featherless 5xx).
+  gemini_model: text-embedding-004
+
+  # On-disk LRU cache for embeddings. Survives daemon restarts; keyed by
+  # (provider, model, text). Default location ~/.sentinel/embed-cache/.
+  cache_dir: ~/.sentinel/embed-cache
+  cache_size_mb: 512
+
+  # httpx timeout in seconds. Below this, fall back to gemini OR escalate.
+  timeout_s: 5.0

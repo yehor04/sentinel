@@ -174,6 +174,28 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 - **Persistence dir:** `/var/sentinel/` (sentinel-data volume, owned by `sentinel:sentinel`; SQLite write lands Day 3+)
 - **Config:** all thresholds + fusion weights load from `configs/cascade.yaml` at startup (Constitution V — no magic floats in source)
 
+## Swarm / multi-agent scope (held thought, 2026-05-16)
+
+Question from the user: *"Devfleet-style setups run 10–20 Claude Code agents in parallel. If one runs on a cheap model, won't it definitely hallucinate? Does Sentinel handle this?"*
+
+**Honest answer:** yes, mostly — Day-2 architecture already supports it; three real gaps for Day 5+.
+
+| Aspect | Status today | Day 5 fix |
+|---|---|---|
+| Stateless `/detect` (N agents fan-in safe) | ✅ Works as-is | — |
+| Per-session traceability via `session_id` | ✅ structlog tags each call | — |
+| O(1) Layer 1 — scales to high RPS | ✅ Hash lookup, not agent-count-bound | — |
+| Single-worker uvicorn (`--workers 1`) | 🟡 Fine to ~100 RPS | Bump to `min(4, cpu_count())` |
+| Per-agent registries | 🟡 Schema supports via `DetectRequest.registry`, hook doesn't populate yet | Wire hook to introspect agent's tool list per call |
+| Cross-agent delegation (A legitimately calls B's tool) | 🔴 Would BLOCK as phantom | v2: namespace-aware union registries |
+| Per-session rate limit | 🔴 None — runaway agent could burn Gemini quota | Caddy IP/session throttle |
+
+**Math the demo will cite:** Llama-3.1-8B-Instruct phantom rate 62.5% (NTA) / 99.7% (DT) per *Reasoning Trap* Table 1. A 20-agent fleet at 50 calls/agent/hour = 1,000 calls/hr = **~625–960 phantoms/hr without Sentinel.** With Sentinel + the deploy-day F1 calibration target of 0.85, that's hundreds of intercepts visible on the dashboard timeline per session.
+
+**Demo narrative:** "20-agent Devfleet on cheap models without Sentinel → audit log fills with `ToolNotFoundError` retries and silent failures. Same fleet with Sentinel → intercept counter climbs in real time, agents auto-corrected to real tools, fleet completes the task. Sentinel's value scales with fleet size."
+
+Tracked as task **T057b** in `specs/001-sentinel-mvp/tasks.md`.
+
 ## Glossary
 
 - **Phantom tool call:** A `tool_use` invocation by an LLM agent where `tool_name` is not present in the active tool registry. Includes both *structured* phantoms (in `tool_calls[].function.name`) and *textual* phantoms (in assistant `content` as ghost claims or bare identifiers).

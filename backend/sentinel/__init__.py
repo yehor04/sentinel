@@ -12,7 +12,14 @@ over the functions and types exposed here.
 
 from __future__ import annotations
 
-from .config import CascadeConfig, FusionWeights, VerdictThresholds, load_cascade_config
+from .config import (
+    CascadeConfig,
+    EmbeddingConfig,
+    FusionWeights,
+    VerdictThresholds,
+    load_cascade_config,
+)
+from .embeddings import Embedder, EmbeddingError, FeatherlessEmbedder, StubEmbedder, get_embedder
 from .layer1 import layer1
 from .registry import load_registry, load_registry_yaml
 from .schemas import (
@@ -40,8 +47,15 @@ __all__ = [
     "Verdict",
     # cascade
     "layer1",
+    # embeddings
+    "Embedder",
+    "EmbeddingError",
+    "FeatherlessEmbedder",
+    "StubEmbedder",
+    "get_embedder",
     # config
     "CascadeConfig",
+    "EmbeddingConfig",
     "FusionWeights",
     "VerdictThresholds",
     "load_cascade_config",
