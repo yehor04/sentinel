@@ -1,5 +1,4 @@
-# Single-stage build for the Sentinel FastAPI daemon. Day 1 keeps it simple;
-# multi-stage optimization can come back later if image size becomes a concern.
+# Single-stage build for the Sentinel FastAPI daemon.
 
 FROM python:3.11-slim
 
@@ -7,19 +6,25 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app/backend
 
 WORKDIR /app
 
-# Day-1 pinned dependency set. Once backend/sentinel/ library lands (Day 2+),
-# we'll switch to `pip install .` against the local pyproject.toml.
+# Day-2 pinned dependency set. Adds structlog (audit logging), rapidfuzz
+# (Levenshtein for F1 heuristic), pyyaml (cascade + registry YAML loaders).
 RUN pip install --no-cache-dir \
         "fastapi>=0.111,<0.130" \
         "uvicorn[standard]>=0.30,<0.40" \
         "pydantic>=2.5,<3" \
-        "httpx>=0.27,<0.30"
+        "httpx>=0.27,<0.30" \
+        "structlog>=24.4,<26" \
+        "rapidfuzz>=3.10,<4" \
+        "pyyaml>=6,<7"
 
+# Backend library + app, and the configs/ dir referenced by config.py and
+# registry.py via repo-relative paths.
 COPY backend/ ./backend/
+COPY configs/ ./configs/
 
 RUN mkdir -p /var/sentinel
 
