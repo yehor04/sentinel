@@ -21,6 +21,7 @@ from .config import (
 )
 from .embeddings import Embedder, EmbeddingError, FeatherlessEmbedder, StubEmbedder, get_embedder
 from .layer1 import layer1
+from .layer2 import layer2, phantom_signature, tool_signature, warm_up_registry
 from .registry import load_registry, load_registry_yaml
 from .schemas import (
     Decision,
@@ -47,6 +48,10 @@ __all__ = [
     "Verdict",
     # cascade
     "layer1",
+    "layer2",
+    "phantom_signature",
+    "tool_signature",
+    "warm_up_registry",
     # embeddings
     "Embedder",
     "EmbeddingError",
