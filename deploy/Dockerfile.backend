@@ -1,4 +1,5 @@
 # Single-stage build for the Sentinel FastAPI daemon.
+# Day-2 hardening: runs as non-root `sentinel` user with UID/GID 10001.
 
 FROM python:3.11-slim
 
@@ -10,8 +11,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Day-2 pinned dependency set. Adds structlog (audit logging), rapidfuzz
-# (Levenshtein for F1 heuristic), pyyaml (cascade + registry YAML loaders).
+# Pinned dependency set. Adds structlog (audit logging), rapidfuzz (Levenshtein
+# for F1 heuristic), pyyaml (cascade + registry YAML loaders).
 RUN pip install --no-cache-dir \
         "fastapi>=0.111,<0.130" \
         "uvicorn[standard]>=0.30,<0.40" \
@@ -21,12 +22,20 @@ RUN pip install --no-cache-dir \
         "rapidfuzz>=3.10,<4" \
         "pyyaml>=6,<7"
 
-# Backend library + app, and the configs/ dir referenced by config.py and
-# registry.py via repo-relative paths.
-COPY backend/ ./backend/
-COPY configs/ ./configs/
+# Create dedicated non-root user with a stable UID/GID so volume permissions
+# stay deterministic across rebuilds. /var/sentinel pre-created so the named
+# docker volume inherits sentinel:sentinel ownership on first mount.
+RUN groupadd --system --gid 10001 sentinel \
+    && useradd --system --uid 10001 --gid sentinel \
+       --no-create-home --shell /usr/sbin/nologin sentinel \
+    && mkdir -p /var/sentinel \
+    && chown -R sentinel:sentinel /var/sentinel /app
 
-RUN mkdir -p /var/sentinel
+# Copy app + configs. Done AFTER user creation so chown can cover the COPY.
+COPY --chown=sentinel:sentinel backend/ ./backend/
+COPY --chown=sentinel:sentinel configs/ ./configs/
+
+USER sentinel
 
 EXPOSE 7777
 

@@ -108,7 +108,18 @@ class DetectRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    tool_name: Annotated[str, Field(min_length=1, description="Tool the agent attempted to invoke.")]
+    tool_name: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=200,
+            description=(
+                "Tool the agent attempted to invoke. Capped at 200 chars to bound the audit-log "
+                "field size and as a basic DOS guard for oversized payloads. Real tool names "
+                "are <=50 chars in every framework I've seen (Claude Code, MCP, OpenAI)."
+            ),
+        ),
+    ]
     tool_input: dict = Field(
         default_factory=dict,
         description="Arguments the agent passed; consumed by F2 schema-key Jaccard heuristic.",

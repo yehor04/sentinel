@@ -8,6 +8,8 @@
 
 **Live demo:** https://sentinel.66-245-207-218.nip.io · [/health](https://sentinel.66-245-207-218.nip.io/health)
 
+**Day 2 production state** (2026-05-16): live registry + Layer 1 cascade on a Vultr Milan VM behind Caddy + Let's Encrypt TLS, isolated on a Docker overlay network with port 7777 never exposed externally. Backend runs as non-root user `sentinel` (uid 10001); SSH is key-only (`PasswordAuthentication no`); secrets are 0600. Every threshold + fusion weight is driven from [`configs/cascade.yaml`](configs/cascade.yaml) (Constitution Principle V — no magic floats in source). Structured JSON audit via `structlog` emits `daemon_startup` + `phantom_intercepted` events on each intercept.
+
 ## The problem
 
 Modern reasoning-enhanced LLM agents hallucinate tools they don't have. The 2026 literature confirms this is getting **worse, not better**:

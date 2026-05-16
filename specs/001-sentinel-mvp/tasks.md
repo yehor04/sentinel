@@ -65,19 +65,25 @@ description: "6-day build sprint task list for Sentinel MVP"
 
 **Purpose**: Define the type contracts and ship the cheap layer.
 
-- [ ] **T015** [P] [US1] Write `backend/sentinel/schemas.py` — pydantic v2 models: `DetectRequest`, `Decision`, `Verdict` (Literal["ALLOW","AUTO_CORRECT","SUGGEST","BLOCK"]), `Suggestion`, `LayerBreakdown`, `Tool`, `ToolRegistry`, `TraceEvent`
-- [ ] **T016** [P] [US1] Write `backend/tests/contract/test_decision_schema.py` — contract tests: BLOCK requires non-empty reason, AUTO_CORRECT requires confidence ≥ 0.85, confidence ∈ [0,1]
-- [ ] **T017** [P] [US1] Write `backend/tests/contract/test_detect_request_schema.py` — schema round-trip JSON tests
-- [ ] **T018** [US1] Write `backend/sentinel/layer1.py` — `def layer1(tool_name, registry) -> Decision | None`. Lowercase normalize, hash set lookup.
-- [ ] **T019** [P] [US1] Write `backend/tests/unit/test_layer1.py` — 4 cases: exact hit, no hit, case difference, empty registry
-- [ ] **T020** [P] [US1] Write `backend/sentinel/heuristics.py` — `def f1_levenshtein(a, b)`, `def f2_jaccard(keys_a, keys_b)`, `def f3_gap(top3_sims)`. Each ≤15 lines.
-- [ ] **T021** [P] [US1] Write `backend/tests/unit/test_heuristics.py` — explicit numeric cases per heuristic (e.g., F1("foo","fop")=0.667; F2({a,b},{b,c})=0.333; F3([0.9,0.5,0.3])=1.0)
-- [ ] **T022** [US1] Write `backend/sentinel/registry.py` — `load_registry_yaml(path) -> ToolRegistry` + stub for MCP `tools/list` introspection
-- [ ] **T023** [US1] Write `configs/registry.yaml` — sample registry of ~20 tools (mix of Claude Code-native names like `Read`, `Edit`, plus MCP-style names like `mcp__lint_check`, `mcp__test_runner`)
-- [ ] **T024** [US1] Write `configs/cascade.yaml` — initial thresholds: auto_correct=0.85, block=0.60, fusion_weights={base:0.5, F1:0.2, F2:0.2, F3:0.1}
-- [ ] **T025** [US1] Wire `app/routes/detect.py` to call `cascade.detect()` (still mocked beyond Layer 1) and persist `TraceEvent` to SQLite
+- [x] **T015** [P] [US1] Wrote `backend/sentinel/schemas.py` — pydantic v2 models with constitutional invariants enforced via `model_validator`. Includes new `GhostClaim` and `tool_name max_length=200` DOS guard.
+- [x] **T016** [P] [US1] `backend/tests/contract/test_decision_schema.py` — 18 contract tests, including `test_decision_with_ghost_claims_json_roundtrip`.
+- [x] **T017** [P] [US1] `backend/tests/contract/test_detect_request_schema.py` — 9 round-trip + bounds tests.
+- [x] **T018** [US1] `backend/sentinel/layer1.py` — O(1) hash lookup via cached `_by_lower` dict (`PrivateAttr`); live latency on Vultr `0.0023ms`.
+- [x] **T019** [P] [US1] `backend/tests/unit/test_layer1.py` — 7 tests including tightened latency gate (median <0.5ms over 200 runs).
+- [x] **T020** [P] [US1] `backend/sentinel/heuristics.py` — F1 Levenshtein (rapidfuzz), F2 Jaccard, F3 gap with config-driven multiplier, fuse with config-driven weights.
+- [x] **T021** [P] [US1] `backend/tests/unit/test_heuristics.py` — 26 tests with hand-computed expected values + `pytest.approx` for IEEE-754 edges.
+- [x] **T022** [US1] `backend/sentinel/registry.py` — yaml -> ToolRegistry; env/repo/etc search path; LRU-cached.
+- [x] **T023** [US1] `configs/registry.yaml` — `web_search` + `mcp__lint_check` baseline (matches Featherless evidence corpus).
+- [x] **T024** [US1] `configs/cascade.yaml` + `backend/sentinel/config.py` — externalised thresholds (0.85, 0.60), fusion weights, F3 multiplier. Single source of truth; daemon loads at startup; `0.85` and `5.0` magic numbers GONE from source. Constitution Principle V cleared.
+- [x] **T025** [US1] `backend/app/main.py` — live `load_registry()` on startup, real `layer1()` on every `/detect`, structlog JSON audit (`daemon_startup`, `phantom_intercepted`). `/health` reports `registry_loaded + size + version`.
 
-**Checkpoint**: Real Layer 1 works against real registry, with full contract enforcement. Heuristics functions tested.
+**Checkpoint**: ✅ Real Layer 1 works against real registry over public HTTPS at https://sentinel.66-245-207-218.nip.io. 61/61 tests pass in 0.09s. Vultr daemon runs as non-root `sentinel` (uid 10001); sshd hardened (key-only, no root password); `.env` chmod 600. **Day 2 GREEN, Complete & Deployed to Milan — 2026-05-16.**
+
+**Day 2 retro (for the record):**
+- `tool_choice: "required"` is not enforced by Featherless for Llama 3.1 8B → phantom tools emerge in `content` rather than structured `tool_calls`. Decision schema gained `ghost_claims` field accordingly.
+- Pydantic v2 `frozen=True` + `PrivateAttr` works fine together — set via `object.__setattr__` inside `@model_validator(mode="after")`. Cached registry index dropped Layer-1 latency from ~50µs to 1.3µs locally / 2.3µs on Vultr public HTTPS.
+- `rsync --delete` nukes `.env` on the VM (because `.env` lives only on the VM, not in the local working tree). Always pass `--exclude='.env'`.
+- Docker named volumes inherit the IMAGE's directory permissions ONLY on first creation. If you change `USER` in the Dockerfile, you must drop the existing volume (`docker volume rm`) so the next mount picks up the new ownership. Caddy's volume must NOT be dropped — that wipes the Let's Encrypt cert and triggers a rate-limited re-issue.
 
 ---
 

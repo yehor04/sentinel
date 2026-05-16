@@ -155,7 +155,7 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 | Day | Date | Status | Outcome |
 |---|---|---|---|
 | Day 1 | 2026-05-13 → 05-15 | ✅ Done | Scaffold + Vultr deploy live at https://sentinel.66-245-207-218.nip.io |
-| Day 2 | 2026-05-16 (next) | ⏳ Pending | Schemas + Layer 1 + heuristics (T015–T025) + bait verification (T014) |
+| Day 2 | 2026-05-15 → 05-16 | ✅ **Complete & Deployed to Milan** | Schemas + Layer 1 + heuristics (T014–T025) + config-driven thresholds + structlog audit + 🔴 red security fixes |
 | Day 3 | 2026-05-17 | ⏳ Pending | Layer 2 + Layer 3 + latency gate (T026–T036) |
 | Day 4 | 2026-05-18 | ⏳ Pending | Dashboard + benchmark + Pareto chart (T037–T050) |
 | Day 5 | 2026-05-19 | ⏳ Pending | Hardening + demo prep + (stretch) MCP middleware (T051–T060) |
@@ -164,11 +164,15 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 ### Production deployment
 
 - **Public URL:** https://sentinel.66-245-207-218.nip.io
-- **VM:** Vultr Milan, vx1-g-2c-8g, 66.245.207.218, root SSH via `~/.ssh/sentinel_vultr`
+- **VM:** Vultr Milan, vx1-g-2c-8g, 66.245.207.218, **SSH key-only** (PasswordAuthentication no, PermitRootLogin prohibit-password)
 - **TLS:** Let's Encrypt via Caddy auto-ACME
-- **Code on VM:** `/opt/sentinel/` (rsync'd from local), `.env` populated
-- **Containers:** `sentinel-backend` (FastAPI mocked) + `sentinel-caddy` (reverse proxy)
-- **Persistence:** `/var/sentinel/sentinel.db` (SQLite, schema TBD Day 2)
+- **Code on VM:** `/opt/sentinel/` (rsynced from local, `--exclude='.env'`)
+- **Secrets:** `/opt/sentinel/.env` mode **0600** (root-only)
+- **Containers:** `sentinel-backend` (FastAPI, real Layer 1, runs as **non-root `sentinel`** uid 10001) + `sentinel-caddy` (reverse proxy)
+- **Live latency:** `l1_ms = 0.0023ms` measured over public HTTPS (200× under the 0.5ms budget)
+- **Audit log:** structlog JSON — `daemon_startup`, `phantom_intercepted` events
+- **Persistence dir:** `/var/sentinel/` (sentinel-data volume, owned by `sentinel:sentinel`; SQLite write lands Day 3+)
+- **Config:** all thresholds + fusion weights load from `configs/cascade.yaml` at startup (Constitution V — no magic floats in source)
 
 ## Glossary
 
