@@ -1,0 +1,40 @@
+# Sentinel cascade thresholds + fusion weights.
+#
+# This file is the SINGLE SOURCE OF TRUTH for every numeric threshold used by
+# the cascade. Constitution Principle V (Reproducibility Over Cleverness):
+# "Every threshold lives in configs/; no floats in code."
+#
+# Calibration on the validation split (T047, Day 4) writes back to this file
+# with the empirically-best values + per-seed mean/std. Hand-edits are valid
+# during development; the calibrator preserves comments and key order.
+
+verdict_thresholds:
+  # Layer 2/3 confidence at or above this -> AUTO_CORRECT (inject correction).
+  # Below 0.85, AUTO_CORRECT is forbidden by Decision schema invariant
+  # (Constitution Principle III).
+  auto_correct_min: 0.85
+
+  # Layer 2/3 confidence BELOW this -> BLOCK (agent must revise plan).
+  # Confidence in the [block_max, auto_correct_min) range -> SUGGEST.
+  block_max: 0.60
+
+fusion:
+  # Layer 2 base = rescaled top-1 cosine. Three fusion features blended in
+  # when confidence is in the ambiguous [block_max, auto_correct_min) range.
+  # Weights MUST sum to 1.0 (validated at load time by config.py).
+  base_weight: 0.5
+  f1_weight: 0.2   # Levenshtein structural similarity
+  f2_weight: 0.2   # Jaccard schema-key similarity
+  f3_weight: 0.1   # top-1 vs top-2 similarity gap
+
+  # F3 multiplier: scales (top1 - top2) gap before clipping to [0, 1].
+  # 5.0 chosen so a typical-noise gap (0.05) maps to 0.25 confidence boost,
+  # while gaps below noise floor stay near zero. See docs/blueprint.md §4.
+  f3_multiplier: 5.0
+
+latency:
+  # Per-layer p95 latency ceilings in milliseconds. Build fails if any layer
+  # exceeds these on `make bench-latency`. Cascade overall median <15ms.
+  l1_p95_ms: 2.0
+  l2_p95_ms: 20.0
+  l3_p95_ms: 500.0

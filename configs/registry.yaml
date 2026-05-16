@@ -1,0 +1,26 @@
+# Sentinel demo tool registry — Day 2 baseline.
+#
+# This is the active tool set the daemon checks against on every /detect
+# call. For the live demo (T061) we'll expand to ~20 tools matching the
+# Claude Code surface (Read, Edit, Bash, Glob, Grep, ...) plus mock MCP
+# entries (mcp__lint_check, mcp__test_runner). Today we ship the two tools
+# referenced by the canonical demo bait + the evidence corpus:
+#
+#   - `web_search` — present in the Featherless bait JSON
+#   - `mcp__lint_check` — the AUTO_CORRECT target named in main.py's mock
+#
+# Edit this file freely; daemon reloads on next startup. Layer 2 embedding
+# cache invalidates whenever `version` changes.
+
+version: "0.1.0-day2"
+
+tools:
+  - name: web_search
+    description: Search the web for information; returns titles + snippets + URLs.
+    required_args: [query]
+    optional_args: [num_results, time_range]
+
+  - name: mcp__lint_check
+    description: Run a static-analysis lint pass over the given file or directory.
+    required_args: [file]
+    optional_args: [strict, ruleset]

@@ -6,7 +6,11 @@ here ripple everywhere — modify with deliberation.
 
 Constitution Principle III (Confidence-Gated Self-Correction): Decision MUST
 populate verdict + confidence + reason. AUTO_CORRECT requires confidence
->= 0.85 (enforced via model_validator). BLOCK requires non-empty reason.
+>= cascade.yaml verdict_thresholds.auto_correct_min (default 0.85).
+
+Constitution Principle V (Reproducibility): the AUTO_CORRECT and BLOCK
+thresholds load from configs/cascade.yaml via config.load_cascade_config().
+No magic floats in this file.
 """
 
 from __future__ import annotations
@@ -14,7 +18,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    model_validator,
+)
+
+from .config import load_cascade_config
 
 # ----------------------------------------------------------------------------
 # Verdict literal — the four possible cascade outcomes
@@ -24,15 +36,16 @@ Verdict = Literal["ALLOW", "AUTO_CORRECT", "SUGGEST", "BLOCK"]
 """Cascade decision.
 
 - ALLOW:         tool exists in registry, pass through unchanged
-- AUTO_CORRECT:  high-confidence (>=0.85) replacement; inject correction
-- SUGGEST:       ambiguous (0.60-0.85); return top-3 candidates to agent
-- BLOCK:         no plausible match (<0.60); agent must revise plan
+- AUTO_CORRECT:  high-confidence (>= cfg.auto_correct_min) replacement
+- SUGGEST:       ambiguous (cfg.block_max .. cfg.auto_correct_min); top-3
+- BLOCK:         no plausible match (< cfg.block_max); agent must revise
 """
 
 
 # ----------------------------------------------------------------------------
 # Tool registry
 # ----------------------------------------------------------------------------
+
 
 class Tool(BaseModel):
     """A single tool available to the agent."""
@@ -46,12 +59,27 @@ class Tool(BaseModel):
 
 
 class ToolRegistry(BaseModel):
-    """The active tool registry against which detection runs."""
+    """Active tool registry. Indices are cached at construction time for O(1)
+    lookup on the Layer 1 hot path (Constitution Principle II: <1ms median).
+    """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     tools: tuple[Tool, ...] = Field(default=(), description="Available tools, ordered by registry sequence.")
     version: str = Field(default="0", description="Registry version tag; bumps invalidate Layer 2 embedding cache.")
+
+    # Cached indices — built once in the post-init validator below. Using
+    # PrivateAttr lets us set these even on a frozen model (object.__setattr__
+    # bypass that pydantic provides for private attributes).
+    _names_lower: frozenset[str] = PrivateAttr(default=frozenset())
+    _by_lower: dict[str, Tool] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _build_indices(self) -> "ToolRegistry":
+        """Pre-compute the lowercase index. Runs exactly once per registry."""
+        object.__setattr__(self, "_names_lower", frozenset(t.name.lower() for t in self.tools))
+        object.__setattr__(self, "_by_lower", {t.name.lower(): t for t in self.tools})
+        return self
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -60,21 +88,18 @@ class ToolRegistry(BaseModel):
 
     @property
     def names_lower(self) -> frozenset[str]:
-        """Tool names lowercased for Layer 1 hash-lookup."""
-        return frozenset(t.name.lower() for t in self.tools)
+        """Tool names lowercased — O(1) membership test for Layer 1."""
+        return self._names_lower
 
     def find(self, name: str) -> Tool | None:
-        """Case-insensitive lookup. Returns None if no match."""
-        target = name.lower()
-        for t in self.tools:
-            if t.name.lower() == target:
-                return t
-        return None
+        """Case-insensitive lookup. O(1) via cached index."""
+        return self._by_lower.get(name.lower())
 
 
 # ----------------------------------------------------------------------------
 # Request — what the hook sends to /detect
 # ----------------------------------------------------------------------------
+
 
 class DetectRequest(BaseModel):
     """Input to the cascade. Hook script translates the Claude Code PreToolUse
@@ -112,6 +137,7 @@ class DetectRequest(BaseModel):
 # ----------------------------------------------------------------------------
 # Decision — the cascade's output (the authoritative contract)
 # ----------------------------------------------------------------------------
+
 
 class Suggestion(BaseModel):
     """A proposed replacement tool when verdict is AUTO_CORRECT or SUGGEST."""
@@ -153,7 +179,7 @@ class Decision(BaseModel):
     """The cascade's output. Authoritative across daemon, hook, dashboard, benchmark.
 
     Invariants (enforced via model_validator):
-    - verdict AUTO_CORRECT requires confidence >= 0.85 AND suggestion is not None
+    - verdict AUTO_CORRECT requires confidence >= cfg.auto_correct_min AND suggestion is not None
     - verdict BLOCK requires len(reason) >= 10
     - verdict SUGGEST requires suggestion is not None
     """
@@ -173,11 +199,12 @@ class Decision(BaseModel):
 
     @model_validator(mode="after")
     def _enforce_verdict_invariants(self) -> "Decision":
+        cfg = load_cascade_config().verdict_thresholds
         if self.verdict == "AUTO_CORRECT":
-            if self.confidence < 0.85:
+            if self.confidence < cfg.auto_correct_min:
                 raise ValueError(
-                    f"AUTO_CORRECT requires confidence >= 0.85 (got {self.confidence:.2f}). "
-                    "Constitution Principle III violation."
+                    f"AUTO_CORRECT requires confidence >= {cfg.auto_correct_min} "
+                    f"(got {self.confidence:.2f}). Constitution Principle III violation."
                 )
             if self.suggestion is None:
                 raise ValueError("AUTO_CORRECT requires a suggestion.")
@@ -196,6 +223,7 @@ class Decision(BaseModel):
 # ----------------------------------------------------------------------------
 # Persistence
 # ----------------------------------------------------------------------------
+
 
 class TraceEvent(BaseModel):
     """Persisted record of one (DetectRequest, Decision) pair for the dashboard

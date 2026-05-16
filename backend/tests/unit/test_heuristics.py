@@ -137,24 +137,31 @@ def test_f3_fewer_than_two_returns_zero() -> None:
 
 def test_fuse_default_weights_max() -> None:
     """All F-features at 1.0, base at 1.0 → result 1.0 (within IEEE 754 noise)."""
-    assert math.isclose(fuse(1.0, 1.0, 1.0, 1.0), 1.0, abs_tol=1e-9)
+    assert fuse(1.0, 1.0, 1.0, 1.0, weights=(0.5, 0.2, 0.2, 0.1)) == pytest.approx(1.0)
 
 
 def test_fuse_default_weights_min() -> None:
     """All inputs zero → result zero."""
-    assert fuse(0.0, 0.0, 0.0, 0.0) == 0.0
+    assert fuse(0.0, 0.0, 0.0, 0.0, weights=(0.5, 0.2, 0.2, 0.1)) == 0.0
 
 
 def test_fuse_base_dominated() -> None:
     """0.5 * 0.70 + 0.2*0 + 0.2*0 + 0.1*0 = 0.35."""
-    val = fuse(0.70, 0.0, 0.0, 0.0)
-    assert math.isclose(val, 0.35, abs_tol=0.001)
+    val = fuse(0.70, 0.0, 0.0, 0.0, weights=(0.5, 0.2, 0.2, 0.1))
+    assert val == pytest.approx(0.35, abs=0.001)
 
 
 def test_fuse_all_features_max() -> None:
     """0.5 * 0.70 + 0.2*1 + 0.2*1 + 0.1*1 = 0.85."""
-    val = fuse(0.70, 1.0, 1.0, 1.0)
-    assert math.isclose(val, 0.85, abs_tol=0.001)
+    val = fuse(0.70, 1.0, 1.0, 1.0, weights=(0.5, 0.2, 0.2, 0.1))
+    assert val == pytest.approx(0.85, abs=0.001)
+
+
+def test_fuse_default_weights_from_config() -> None:
+    """When no weights are passed, fuse loads from configs/cascade.yaml."""
+    # Default config weights are (0.5, 0.2, 0.2, 0.1) → max possible = 1.0
+    val = fuse(1.0, 1.0, 1.0, 1.0)
+    assert val == pytest.approx(1.0)
 
 
 def test_fuse_custom_weights_validated() -> None:

@@ -66,23 +66,27 @@ def test_empty_tool_name_misses() -> None:
 def test_l1_latency_under_budget() -> None:
     """Constitution Principle II: Layer 1 median <1ms, p95 <2ms.
 
-    This is a smoke check — not a rigorous benchmark. The full latency gate
-    lives in `make bench-latency` (T035). Here we just assert any single call
-    completes in well under our budget on dev hardware.
+    With the cached registry index (PrivateAttr in ToolRegistry), Layer 1 is
+    a single dict-membership test plus a Decision construction. On dev
+    hardware this should land well under 0.5ms.
     """
     # Warm up
-    for _ in range(10):
+    for _ in range(20):
         layer1("Read", _REG)
 
-    # 100 runs, take max
-    deadline_ms = 5.0  # generous on dev laptop; tighter on Vultr
-    max_observed = 0.0
-    for _ in range(100):
+    # 200 runs, take median + max
+    deadline_ms = 0.5  # post-PrivateAttr-caching target
+    timings_ms: list[float] = []
+    for _ in range(200):
         t0 = time.perf_counter()
         layer1("Read", _REG)
-        dt = (time.perf_counter() - t0) * 1000.0
-        max_observed = max(max_observed, dt)
+        timings_ms.append((time.perf_counter() - t0) * 1000.0)
 
-    assert max_observed < deadline_ms, (
-        f"Layer 1 exceeded {deadline_ms}ms ceiling: max {max_observed:.3f}ms over 100 runs"
+    timings_ms.sort()
+    median_ms = timings_ms[len(timings_ms) // 2]
+    max_ms = timings_ms[-1]
+
+    assert median_ms < deadline_ms, (
+        f"Layer 1 median exceeded {deadline_ms}ms: median={median_ms:.3f}ms "
+        f"max={max_ms:.3f}ms over 200 runs"
     )

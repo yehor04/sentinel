@@ -189,6 +189,39 @@ def test_decision_with_ghost_claims() -> None:
     assert d.ghost_claims[0].inferred_name == "database_interface_tool"
 
 
+def test_decision_with_ghost_claims_json_roundtrip() -> None:
+    """Full serialization integrity of ghost_claims through the hook ↔ daemon
+    transport. If JSON drops the field or coerces span/fragment, the dashboard
+    would render incomplete audit trails for evidence captures.
+    """
+    original = Decision(
+        verdict="BLOCK",
+        confidence=0.93,
+        reason="6 phantom tool claims in content; no real tool called.",
+        ghost_claims=(
+            GhostClaim(
+                fragment="Database Interface Tool (DIT)",
+                inferred_name="database_interface_tool",
+                span=(58, 86),
+            ),
+            GhostClaim(
+                fragment="Data Storage Tool (DST)",
+                inferred_name="data_storage_tool",
+                span=(241, 263),
+            ),
+        ),
+    )
+
+    payload = original.model_dump_json()
+    rehydrated = Decision.model_validate_json(payload)
+
+    assert rehydrated == original
+    assert len(rehydrated.ghost_claims) == 2
+    assert rehydrated.ghost_claims[0].fragment == "Database Interface Tool (DIT)"
+    assert rehydrated.ghost_claims[0].span == (58, 86)
+    assert rehydrated.ghost_claims[1].inferred_name == "data_storage_tool"
+
+
 # ----------------------------------------------------------------------------
 # JSON round-trip — daemon ↔ hook contract
 # ----------------------------------------------------------------------------
