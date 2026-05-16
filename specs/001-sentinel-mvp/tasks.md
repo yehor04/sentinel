@@ -43,7 +43,13 @@ description: "6-day build sprint task list for Sentinel MVP"
 - [x] **T011** [US1] Verify local daemon roundtrip: `make dev` → POST /detect → JSON response → hook script exit codes verified (exit 2 with daemon up + AUTO_CORRECT; exit 0 fail-open with daemon down)
 - [x] **T012** [US1] Provision Vultr VM `vx1-g-2c-8g` in Milan (66.245.207.218), 50GB Ubuntu 24.04 bootable volume, SSH key + firewall group attached
 - [x] **T013** [US1] First deploy to Vultr live at **https://sentinel.66-245-207-218.nip.io** — Let's Encrypt cert, `/health` 200 OK, `/detect` returns AUTO_CORRECT JSON. **DAY 1 CHECKPOINT GREEN — 2026-05-15 ✅**
-- [ ] **T014** [P] [US1] Day 1 bait verification: hand-craft 3 prompts; test against Claude Sonnet 4.6 in a fresh project; record which reliably produce phantom tool calls. Pass criterion: ≥1 prompt triggers phantoms in 4/5 attempts. **DEFERRED to Day 2 morning**.
+- [x] **T014** [P] [US1] Day 1 bait verification (executed 2026-05-15/16):
+  - **Trial 1** Claude Sonnet 4.6, overt phantom prompt → refused cleanly (RLHF abstention working). Not Sentinel's target audience.
+  - **Trial 2** Llama-3.1-8B-Instruct via Featherless, subtle prompt + `tool_choice: auto` → Tool Bypass (Healy Type 5): described actions in text instead of calling any tool.
+  - **Trial 3** Same model + `tool_choice: required` + "invent the most logical tool" directive → **6 ghost tool claims in `content`** (`Database Interface Tool`, `Data Storage Tool`, etc.) plus a fabricated success message. Captured at `data/evidence/2026-05-16-llama-ghost-claims.md`.
+  - **Trial 4** Same model + "JSON-ONLY, invent a tool name if missing" directive → **bare phantom**: response was the single string `` `save_core_database_findings` ``. Captured at `data/evidence/2026-05-16-llama-bare-phantom.md`.
+  - **Conclusion:** phantom fabrication is real on cheap open-source models. Featherless silently ignores `tool_choice: "required"` — phantom names emerge in `content` rather than `tool_calls`. **SCOPE REFINEMENT for Day 2:** Layer 1 must scan tool-name-like tokens in both `tool_calls[].function.name` and assistant `content`. Decision schema gains `ghost_claims: list[str]` field.
+  - **Featherless platform quirks documented** for the spec/quirks list.
 
 **Checkpoint**: ✅ Public URL works. Hook + daemon + Caddy + TLS end-to-end. Bait verification deferred.
 

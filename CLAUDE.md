@@ -15,7 +15,14 @@ No commercial product ships phantom-tool-call detection today. Sentinel is the f
 
 ## WHAT: The product
 
-Sentinel is a three-layer cascade that wraps any autonomous LLM agent and intercepts tool-call attempts before execution:
+Sentinel is a three-layer cascade that wraps any autonomous LLM agent and intercepts phantom tool-name fabrications before execution. **Phantom fabrications are detected in two locations:**
+
+1. **`tool_calls[].function.name`** — structured tool invocations naming nonexistent tools (Healy IR Type 1 — Function Selection Error)
+2. **Assistant `content`** — fabricated tool-name-like tokens appearing in prose or as bare identifiers (Healy IR Type 1 + Type 5 — Tool Bypass with ghost claims)
+
+Both are real-world failures observed on Llama-3.1-8B via Featherless on 2026-05-16 — see `data/evidence/` for reproducible captures.
+
+### Cascade summary
 
 1. **Layer 1 — Registry exact match** (in-memory hash, <1ms median)
 2. **Layer 2 — Embedding similarity** (Featherless-hosted small model, <10ms median)
@@ -165,7 +172,8 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 
 ## Glossary
 
-- **Phantom tool call:** A `tool_use` invocation by an LLM agent where `tool_name` is not present in the active tool registry.
+- **Phantom tool call:** A `tool_use` invocation by an LLM agent where `tool_name` is not present in the active tool registry. Includes both *structured* phantoms (in `tool_calls[].function.name`) and *textual* phantoms (in assistant `content` as ghost claims or bare identifiers).
+- **Ghost claim:** A tool name appearing in assistant `content` that does not appear in the registry AND is not invoked via `tool_calls`. The model textually pretends a tool was used. Healy IR Type 1 + Type 5 combined.
 - **Cascade:** The 3-layer detection pipeline (L1 registry / L2 embedding / L3 verifier).
 - **F1 / F2 / F3:** Three fusion heuristics added to Layer 2 confidence — Levenshtein distance, schema-key Jaccard, top-1-vs-top-2 gap. See `docs/blueprint.md`.
 - **Bait corpus:** Hand-crafted prompts that reliably induce phantom tool calls in current LLMs. Lives in `data/bait-corpus/`.
