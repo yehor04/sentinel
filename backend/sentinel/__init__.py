@@ -21,7 +21,14 @@ from .config import (
     load_cascade_config,
 )
 from .cascade import detect
-from .embeddings import Embedder, EmbeddingError, FeatherlessEmbedder, StubEmbedder, get_embedder
+from .embeddings import (
+    Embedder,
+    EmbeddingError,
+    FeatherlessEmbedder,
+    GeminiEmbedder,
+    StubEmbedder,
+    get_embedder,
+)
 from .layer1 import layer1
 from .layer2 import layer2, phantom_signature, tool_signature, warm_up_registry
 from .layer3 import (
@@ -80,6 +87,7 @@ __all__ = [
     "Embedder",
     "EmbeddingError",
     "FeatherlessEmbedder",
+    "GeminiEmbedder",
     "StubEmbedder",
     "get_embedder",
     # config

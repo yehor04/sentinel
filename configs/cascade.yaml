@@ -40,17 +40,27 @@ latency:
   l3_p95_ms: 500.0
 
 embedding:
-  # Layer 2 embedding backend. 'featherless' uses an OpenAI-compatible
-  # /v1/embeddings endpoint. 'gemini' uses Google's text-embedding-004.
-  # 'stub' is for tests — deterministic hash-based pseudo-embedding, no I/O.
-  provider: featherless
+  # Layer 2 embedding backend.
+  #   'gemini'     - Google text-embedding-004 (768-dim, 1500 RPM free tier).
+  #                  Sentinel's default — reliable, real semantic embeddings.
+  #   'featherless' - OpenAI-compatible /v1/embeddings — NOT currently supported
+  #                  by Featherless (returns 404). Class kept for future chat-
+  #                  based pseudo-embedding fallback.
+  #   'stub'       - deterministic hash-based pseudo-embedding, no I/O.
+  #                  Used by tests and as a boot-safe fallback when no API
+  #                  keys are configured.
+  provider: gemini
 
-  # Featherless: small fast open-source model, 384-dim. The bge-small family
-  # is the canonical small-embedding choice and Featherless serves it.
+  # Featherless model id — used only when provider='featherless'. Kept for
+  # documentation; switch back if Featherless ever ships /v1/embeddings.
   featherless_model: BAAI/bge-small-en-v1.5
 
-  # Gemini fallback (if FEATHERLESS_API_KEY missing or Featherless 5xx).
-  gemini_model: text-embedding-004
+  # Gemini gemini-embedding-001: native 3072-dim, truncated to 768 via
+  # the SDK's output_dimensionality knob for memory + downstream-dim parity.
+  # This is the current production-supported embedding model on v1beta
+  # (verified via `genai.list_models()` against our key on 2026-05-17;
+  # text-embedding-004 and embedding-001 both 404 there). Free tier 1500 RPM.
+  gemini_model: gemini-embedding-001
 
   # On-disk LRU cache for embeddings. Survives daemon restarts; keyed by
   # (provider, model, text). Default points at /var/sentinel/ because the

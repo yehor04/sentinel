@@ -5,11 +5,17 @@ services:
       dockerfile: deploy/Dockerfile.backend
     container_name: sentinel-backend
     restart: unless-stopped
+    # env_file passes the entire .env contents directly into the container's
+    # environment. This makes `docker compose up` work without first having
+    # to `set -a; source .env; set +a` in the shell — durable across reboots.
+    env_file:
+      - ../.env
+    # Container-level overrides (explicit > env_file). Anything declared here
+    # wins over the same key in .env. Keeping these makes the container env
+    # contract explicit and self-documenting.
     environment:
       - SENTINEL_PORT=7777
       - SENTINEL_DB_PATH=/var/sentinel/sentinel.db
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - FEATHERLESS_API_KEY=${FEATHERLESS_API_KEY}
     volumes:
       - sentinel-data:/var/sentinel
     expose:
@@ -51,8 +57,11 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    environment:
-      - SENTINEL_DOMAIN=${SENTINEL_DOMAIN}
+    # Caddy reads SENTINEL_DOMAIN from container env for the Caddyfile's
+    # {$SENTINEL_DOMAIN} placeholder. env_file ensures we don't depend on
+    # the shell sourcing .env before `docker compose up`.
+    env_file:
+      - ../.env
     networks:
       - sentinel-net
     depends_on:

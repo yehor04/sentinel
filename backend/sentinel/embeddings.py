@@ -166,6 +166,83 @@ class FeatherlessEmbedder:
 
 
 # ----------------------------------------------------------------------------
+# Gemini embedding backend (Google text-embedding-004)
+# ----------------------------------------------------------------------------
+
+
+class GeminiEmbedder:
+    """Google `gemini-embedding-001` via the `google.generativeai` SDK.
+
+    768-dim via `output_dimensionality=768` (model's native 3072 truncated to
+    save memory + match the dim of our other embedders). Free tier up to
+    1500 RPM. Used as Sentinel's default Layer 2 embedder because Featherless
+    doesn't expose a /v1/embeddings endpoint (404). FeatherlessEmbedder stays
+    in the codebase for future chat-based pseudo-embedding fallback.
+    """
+
+    DEFAULT_DIM = 768
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "models/gemini-embedding-001",
+        *,
+        output_dimensionality: int = DEFAULT_DIM,
+        cache: _DiskCache | None = None,
+        timeout: float = 5.0,
+    ) -> None:
+        if not api_key:
+            raise EmbeddingError("GEMINI_API_KEY not set; cannot init GeminiEmbedder.")
+        import google.generativeai as genai
+
+        # NOTE: genai.configure() is module-global state. Calling it twice with
+        # different keys would clobber the previous config. Today only one
+        # GeminiEmbedder is ever constructed (via the LRU-cached factory) so
+        # this is benign; flag for prod multi-tenant work.
+        genai.configure(api_key=api_key)
+        self._genai = genai
+        self.api_key = api_key
+        self.model = model if model.startswith("models/") else f"models/{model}"
+        self.output_dimensionality = output_dimensionality
+        self.cache = cache
+        self.timeout = timeout
+        self.dim: int = output_dimensionality
+
+    def embed(self, text: str) -> list[float]:
+        if self.cache is not None:
+            hit = self.cache.get(_DiskCache.key("gemini", self.model, text))
+            if hit is not None:
+                return hit
+
+        try:
+            result = self._genai.embed_content(
+                model=self.model,
+                content=text,
+                task_type="retrieval_document",
+                output_dimensionality=self.output_dimensionality,
+            )
+        except Exception as e:
+            log.warning("gemini_embed_failed", error=str(e), text_len=len(text))
+            raise EmbeddingError(f"Gemini embed failed: {e}") from e
+
+        try:
+            vec: list[float] = list(result["embedding"])
+        except (KeyError, TypeError) as e:
+            raise EmbeddingError(
+                f"Gemini returned malformed embedding payload: {result!r}"
+            ) from e
+
+        if len(vec) != self.dim:
+            raise EmbeddingError(
+                f"Embedding dim mismatch: expected {self.dim}, got {len(vec)} for model {self.model}"
+            )
+
+        if self.cache is not None:
+            self.cache.put(_DiskCache.key("gemini", self.model, text), vec)
+        return vec
+
+
+# ----------------------------------------------------------------------------
 # Stub backend — tests + offline development
 # ----------------------------------------------------------------------------
 
@@ -259,11 +336,19 @@ def get_embedder() -> Embedder:
             return StubEmbedder()
 
     if provider == "gemini":
-        # Day-3 placeholder — Gemini embedding backend wired alongside Layer 3.
-        # For now, falling back to stub keeps boot safe; T030 lands the real
-        # implementation when Gemini Flash gets wired for Layer 3.
-        log.info("embedder_init", provider="gemini-stub", note="real gemini lands with T030")
-        return StubEmbedder()
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        try:
+            emb = GeminiEmbedder(
+                api_key=api_key,
+                model=cfg.gemini_model,
+                cache=cache,
+                timeout=cfg.timeout_s,
+            )
+            log.info("embedder_init", provider="gemini", model=cfg.gemini_model)
+            return emb
+        except EmbeddingError as e:
+            log.warning("embedder_fallback_to_stub", attempted="gemini", reason=str(e))
+            return StubEmbedder()
 
     log.warning("unknown_embedding_provider", provider=provider)
     return StubEmbedder()
