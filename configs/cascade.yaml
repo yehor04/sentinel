@@ -59,3 +59,27 @@ embedding:
 
   # httpx timeout in seconds. Below this, fall back to gemini OR escalate.
   timeout_s: 5.0
+
+verifier:
+  # Layer 3 semantic verifier — fires only when Layer 2 confidence is in the
+  # ambiguous window [block_max, auto_correct_min). 'gemini' uses Gemini
+  # Flash via google-generativeai SDK. 'stub' returns None (cascade degrades
+  # to Layer 2 decision) — used by tests and as a boot-safe fallback when
+  # GEMINI_API_KEY is missing.
+  provider: gemini
+
+  # Gemini Flash 2.5 — chosen for the latency budget: ~300ms median P50,
+  # ~500ms p95. Cheaper than Pro by ~7x. Tuned to JSON structured output.
+  gemini_model: gemini-2.5-flash
+
+  # Structured-output strictness. Temperature 0 keeps the verifier
+  # deterministic-ish so the same phantom yields the same correction.
+  temperature: 0.0
+
+  # Hard timeout in seconds. On timeout the cascade falls back to the
+  # Layer 2 decision with degraded=True; the agent still gets a Decision.
+  timeout_s: 2.0
+
+  # Cap on the verifier's output to bound cost. The Decision schema also
+  # caps `reason` at 240 chars, so 512 tokens is generous.
+  max_output_tokens: 512

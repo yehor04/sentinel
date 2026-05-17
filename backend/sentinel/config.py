@@ -99,6 +99,18 @@ class EmbeddingConfig(BaseModel):
     timeout_s: float = Field(gt=0.0, default=5.0)
 
 
+class VerifierConfig(BaseModel):
+    """Layer-3 semantic verifier — Gemini Flash by default, stub for tests."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: Literal["gemini", "stub"] = "gemini"
+    gemini_model: str = "gemini-2.5-flash"
+    temperature: float = Field(ge=0.0, le=2.0, default=0.0)
+    timeout_s: float = Field(gt=0.0, default=2.0)
+    max_output_tokens: int = Field(gt=0, default=512)
+
+
 class CascadeConfig(BaseModel):
     """Top-level cascade config; mirrors configs/cascade.yaml structure."""
 
@@ -108,6 +120,7 @@ class CascadeConfig(BaseModel):
     fusion: FusionWeights = Field(default_factory=FusionWeights)
     latency: LatencyBudget = Field(default_factory=LatencyBudget)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    verifier: VerifierConfig = Field(default_factory=VerifierConfig)
 
 
 # ----------------------------------------------------------------------------

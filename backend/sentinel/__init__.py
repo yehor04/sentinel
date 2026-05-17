@@ -17,11 +17,23 @@ from .config import (
     EmbeddingConfig,
     FusionWeights,
     VerdictThresholds,
+    VerifierConfig,
     load_cascade_config,
 )
 from .embeddings import Embedder, EmbeddingError, FeatherlessEmbedder, StubEmbedder, get_embedder
 from .layer1 import layer1
 from .layer2 import layer2, phantom_signature, tool_signature, warm_up_registry
+from .layer3 import (
+    GeminiClient,
+    GeminiFlashVerifier,
+    LLMClient,
+    StubVerifier,
+    Verifier,
+    VerifierResponse,
+    VerifierSuggestion,
+    get_verifier,
+    layer3,
+)
 from .registry import load_registry, load_registry_yaml
 from .schemas import (
     Decision,
@@ -49,9 +61,19 @@ __all__ = [
     # cascade
     "layer1",
     "layer2",
+    "layer3",
     "phantom_signature",
     "tool_signature",
     "warm_up_registry",
+    # layer 3 (Gemini verifier)
+    "GeminiClient",
+    "GeminiFlashVerifier",
+    "LLMClient",
+    "StubVerifier",
+    "Verifier",
+    "VerifierResponse",
+    "VerifierSuggestion",
+    "get_verifier",
     # embeddings
     "Embedder",
     "EmbeddingError",
@@ -63,6 +85,7 @@ __all__ = [
     "EmbeddingConfig",
     "FusionWeights",
     "VerdictThresholds",
+    "VerifierConfig",
     "load_cascade_config",
     # registry
     "load_registry",
