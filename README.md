@@ -10,6 +10,8 @@
 
 **Day 2 production state** (2026-05-16): live registry + Layer 1 cascade on a Vultr Milan VM behind Caddy + Let's Encrypt TLS, isolated on a Docker overlay network with port 7777 never exposed externally. Backend runs as non-root user `sentinel` (uid 10001); SSH is key-only (`PasswordAuthentication no`); secrets are 0600. Every threshold + fusion weight is driven from [`configs/cascade.yaml`](configs/cascade.yaml) (Constitution Principle V — no magic floats in source). Structured JSON audit via `structlog` emits `daemon_startup` + `phantom_intercepted` events on each intercept.
 
+**Day 3 cascade (local, v0.3.1-day3-cascade)**: full 3-layer cascade wired — `cascade.detect()` strings L1 (exact match) → L2 (embedding similarity + F1/F2/F3 fusion) → L3 (Gemini Flash semantic verifier). L3 fires only when L2 is in the ambiguous window `[block_max, auto_correct_min)`. Confidence fusion `0.6·L3 + 0.4·L2` per [blueprint §4](docs/blueprint.md). Two hardening guards: **H1** rejects L3 suggestions whose `tool_name` is not in the active registry (anti-injection); **H2** rejects L3 verdict=ALLOW outright (ALLOW is L1's exclusive verdict). Daemon boots even with `GEMINI_API_KEY` and `FEATHERLESS_API_KEY` absent — falls through to `StubVerifier(None)` and `StubEmbedder` (Constitution IV). **132/132 tests pass in 24s** including 14 cascade integration scenarios. Vultr re-deploy of the cascade lands in Day-4 hardening.
+
 ## The problem
 
 Modern reasoning-enhanced LLM agents hallucinate tools they don't have. The 2026 literature confirms this is getting **worse, not better**:

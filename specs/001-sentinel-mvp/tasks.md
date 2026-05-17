@@ -91,19 +91,26 @@ description: "6-day build sprint task list for Sentinel MVP"
 
 **Purpose**: Complete the cascade and prove the 10ms median budget on Layer 1+2.
 
-- [ ] **T026** [US1] Write `backend/sentinel/embeddings.py` — Featherless OpenAI-compatible client (chat completions or embeddings endpoint), on-disk LRU cache via `diskcache`
-- [ ] **T027** [US1] Write daemon warm-up routine: on startup, embed every tool's signature (name + description + schema keys), store in in-memory dict
-- [ ] **T028** [US1] Write `backend/sentinel/layer2.py` — `def layer2(req, registry, embed_fn) -> (confidence, candidates, layer_breakdown)`. Cosine via numpy. Apply F1/F2/F3 fusion when 0.60 ≤ base ≤ 0.85.
-- [ ] **T029** [P] [US1] Write `backend/tests/unit/test_layer2.py` — 6 cases: clean match, near-typo (F1 dominant), schema-twin (F2 dominant), wide top-1 gap (F3 dominant), tied top-1 (escalate), no candidate above 0.3 (BLOCK)
-- [ ] **T030** [US1] Write `backend/sentinel/layer3.py` — Gemini Flash client with structured-output JSON schema from `docs/blueprint.md` §4. Pydantic-validate the response.
-- [ ] **T031** [P] [US1] Write `backend/tests/unit/test_layer3.py` — 3 cases (using `respx` to mock Gemini): ALLOW, AUTO_CORRECT, BLOCK; +1 timeout case → degraded=True
-- [ ] **T032** [US1] Write `backend/sentinel/cascade.py` — orchestrator wiring L1 → L2 → L3. Returns final `Decision` with `layer_breakdown`.
-- [ ] **T033** [P] [US1] Write `backend/tests/integration/test_cascade_end_to_end.py` — happy path scenarios across all 4 verdicts
-- [ ] **T034** [US1] Write `backend/bench/run_bench.py` — minimum viable: load 50 hand-picked examples, run cascade, dump `results/<date>-pilot.json`
-- [ ] **T035** [US1] **Latency gate**: `make bench-latency` — run cascade 1,000 times on Layer-1-hit + Layer-2-hit cases (no Layer 3), assert median ≤10ms. Fail build if exceeded. **DAY 3 CHECKPOINT**
-- [ ] **T036** [P] [US1] Update mocked `app/main.py` to use real `cascade.detect()`; redeploy to Vultr.
+- [x] **T026** [US1] `backend/sentinel/embeddings.py` — Embedder Protocol + FeatherlessEmbedder (OpenAI-compat /v1/embeddings, BGE-small 384-dim, schema-validated payloads) + StubEmbedder (deterministic, NaN-free uint32→[-1,1] hash mapping) + on-disk `_DiskCache` (sha256-keyed) + `get_embedder()` LRU-cached factory. Boot-safe fallback when FEATHERLESS_API_KEY missing.
+- [x] **T027** [US1] `backend/sentinel/layer2.py::warm_up_registry()` — embeds every registered tool's signature (name + description + arg keys) at startup. Per-tool failures logged + skipped (graceful partial-warmup). Structlog emits `registry_warmed_up{embedded, total, failures, elapsed_ms}`.
+- [x] **T028** [US1] `backend/sentinel/layer2.py::layer2()` — phantom embed → cosine vs warm registry vectors → top-3 sort → rescale top-1 to base conf via `(sim - 0.5) * 2` → fusion gate `[block_max, auto_correct_min)` → F1/F2/F3 fuse → verdict mapping. Distinct degradation modes (empty registry vs warm-embeddings missing). Never returns ALLOW.
+- [x] **T029** [P] [US1] `backend/tests/unit/test_layer2.py` — 16 tests including MockEmbedder + `_make_vec()` for exact cosine relationships; 10 scenarios covered (clean, near-typo, schema-twin, wide gap, tied, no candidate, empty registry, embed failure, no warm embeddings, latency).
+- [x] **T030** [US1] `backend/sentinel/layer3.py` — Verifier Protocol + GeminiFlashVerifier (lazy-imports `google.generativeai`, structured JSON output, temperature=0) + LLMClient Protocol + GeminiClient + StubVerifier (records call context, boot-safe fallback) + `get_verifier()` LRU factory. Three failure paths (transport / parse / schema) all return None. **H2 guard: Layer 3 rejecting ALLOW** (treats injection-shaped responses as schema violations).
+- [x] **T031** [P] [US1] `backend/tests/unit/test_layer3.py` — 24 tests including MockLLMClient with canned response queue; 3 protocol conformance, 3 happy paths (AUTO_CORRECT/SUGGEST/BLOCK), 6 failure paths, 3 StubVerifier behaviors, 4 factory tests, 3 prompt-builder tests, 2 layer3() wrapper tests.
+- [x] **T032** [US1] `backend/sentinel/cascade.py::detect()` — orchestrator wiring L1 → L2 → L3. L3 escalation gated on L2 verdict == SUGGEST. Confidence fusion `0.6 * L3 + 0.4 * L2` per blueprint §4. Verdict re-mapping when fusion drops below threshold. **H1 guard: validates `suggestion.tool_name` is in registry**; un-registered suggestion → hard BLOCK.
+- [x] **T033** [P] [US1] `backend/tests/integration/test_cascade.py` — 14 scenarios across the full L1/L2/L3 surface: L1 hit skips L2/L3; L2 terminal verdicts (AUTO_CORRECT/BLOCK) skip L3; L3 fires only on L2 SUGGEST; fusion lifts above threshold; fusion downgrades; L3 None → L2 with degraded flag; **H1 fires** (L3 suggesting phantom tool → BLOCK); 4 unit tests of `_remap_verdict_after_fusion`.
+- [ ] **T034** [US1] `backend/bench/run_bench.py` — minimum viable: 50 hand-picked examples, run cascade, dump `results/<date>-pilot.json` *(pending Day 4)*
+- [ ] **T035** [US1] **Latency gate**: `make bench-latency` *(pending Day 4)*
+- [x] **T036** [P] [US1] `backend/app/main.py` — wired to `cascade.detect()` (v0.3.1-day3-cascade). Single line replaces inline L1+L2 path. `/health` reports verifier type. Audit log emits per-layer breakdown (l1_ms / l2_ms / l3_ms).
 
-**Checkpoint**: Full cascade works. Latency budget verified. Vultr serves real decisions.
+**Day 3 hardening (carried in with T032 commit):**
+- C1: `configs/cascade.yaml` `embedding.cache_dir` default changed from `~/.sentinel/embed-cache` to `/var/sentinel/embed-cache` — non-root `sentinel` user in production can't write to `$HOME` (--no-create-home in Dockerfile), so the disk LRU cache was silently disabled in prod. Fix puts it on the chowned named volume.
+- C2: `DetectRequest.tool_input` capped at 64 keys (pydantic v2 `max_length` on dict) — prevents DOS via unbounded payload that would balloon the Layer 3 Gemini prompt and burn quota.
+- M3: `Tool.description` capped at 2000 chars — bounds embedding signature length + Layer 3 prompt size.
+- H1: cascade.py validates `suggestion.tool_name in registry` before propagating — Gemini-fabricated or prompt-injected suggestions get caught.
+- H2: layer3.py rejects ALLOW verdicts from Gemini — ALLOW is exclusively Layer 1's verdict; any Layer 3 ALLOW indicates injection / misbehavior.
+
+**Checkpoint**: ✅ Full cascade works locally. 132/132 tests pass in 24s. Vultr re-deploy of Day-3 cascade and `make bench-latency` (T035) pending Day 4.
 
 ---
 

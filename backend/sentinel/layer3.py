@@ -222,10 +222,25 @@ class GeminiFlashVerifier:
             return None
 
         try:
-            return VerifierResponse.model_validate(data)
+            response = VerifierResponse.model_validate(data)
         except ValidationError as e:
             log.warning("layer3_schema_violation", error=str(e), raw_head=raw[:120] if raw else "")
             return None
+
+        # Anti-injection guard: ALLOW is exclusively Layer 1's verdict. A Layer 3
+        # response asserting ALLOW indicates either a prompt-injection through
+        # agent_reasoning, or a misbehaving Gemini. Treat as if the verifier
+        # never spoke -> cascade falls back to Layer 2's decision with
+        # degraded=True.
+        if response.verdict == "ALLOW":
+            log.warning(
+                "layer3_returned_allow_rejected",
+                tool=req.tool_name,
+                note="Layer 3 must not produce ALLOW; treating as injection attempt",
+            )
+            return None
+
+        return response
 
     def _build_prompt(
         self,

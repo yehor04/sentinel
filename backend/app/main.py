@@ -1,12 +1,10 @@
-"""Sentinel FastAPI daemon — Day 3 wiring.
+"""Sentinel FastAPI daemon — Day 3 final wiring (cascade live).
 
-Day 1 shipped a fully mocked `/detect` to clear the deploy pipeline.
-Day 2 wired live Layer 1 (registry exact-match) + structured audit log.
-Day 3 wires Layer 2: warm every registered tool's embedding at startup,
-and on a Layer 1 miss run the embedding similarity + F1/F2/F3 fusion
-cascade to produce a real AUTO_CORRECT / SUGGEST / BLOCK decision.
-
-Layer 3 (Gemini Flash verifier) escalation lands with T030/T032.
+Day 1 mocked /detect, Day 2 wired live Layer 1, Day 3 (this revision)
+wires the full 3-layer cascade through `cascade.detect()`. The daemon
+loads registry + embedder + verifier at startup, warms registry
+embeddings once, then every /detect call runs the orchestrator that
+strings L1 → L2 → (optional L3) and produces a schema-valid Decision.
 
 Run locally: `uvicorn backend.app.main:app --host 0.0.0.0 --port 7777`
 """
@@ -29,9 +27,10 @@ from sentinel import (
     DetectRequest,
     Embedder,
     ToolRegistry,
+    Verifier,
+    detect as cascade_detect,
     get_embedder,
-    layer1,
-    layer2,
+    get_verifier,
     load_registry,
     warm_up_registry,
 )
@@ -58,18 +57,19 @@ log = structlog.get_logger("sentinel.daemon")
 
 app = FastAPI(
     title="Sentinel",
-    version="0.3.0-day3",
-    description="Phantom tool-call detector with 3-layer cascade. Day 3 wiring (Layer 1 + Layer 2 live).",
+    version="0.3.1-day3-cascade",
+    description="Phantom tool-call detector — 3-layer cascade live (L1 + L2 + L3).",
 )
 
 
 class _State:
-    """Process-local daemon state: registry, warm embeddings, embedder
-    instance, and SSE subscribers. Initialised on the FastAPI startup hook."""
+    """Process-local daemon state: registry, warm embeddings, embedder,
+    verifier, and SSE subscribers. Initialised on the FastAPI startup hook."""
 
     def __init__(self) -> None:
         self.registry: ToolRegistry = ToolRegistry()
         self.embedder: Embedder | None = None
+        self.verifier: Verifier | None = None
         self.registry_embeddings: dict[str, list[float]] = {}
         self.event_subscribers: list[asyncio.Queue[Decision]] = []
 
@@ -79,9 +79,10 @@ _state = _State()
 
 @app.on_event("startup")  # type: ignore[deprecated]
 async def _on_startup() -> None:
-    """Load registry, build embedder, warm up registry embeddings."""
+    """Load registry, build embedder + verifier, warm up registry embeddings."""
     _state.registry = load_registry()
     _state.embedder = get_embedder()
+    _state.verifier = get_verifier()  # may be StubVerifier when GEMINI_API_KEY missing
 
     warm_start = time.perf_counter()
     _state.registry_embeddings = warm_up_registry(_state.registry, _state.embedder)
@@ -98,6 +99,9 @@ async def _on_startup() -> None:
         warmup_ms=round(warm_elapsed_ms, 2),
         embedding_provider=cfg.embedding.provider,
         embedding_model=cfg.embedding.featherless_model,
+        verifier_provider=cfg.verifier.provider,
+        verifier_model=cfg.verifier.gemini_model,
+        verifier_type=type(_state.verifier).__name__,
         auto_correct_min=cfg.verdict_thresholds.auto_correct_min,
         block_max=cfg.verdict_thresholds.block_max,
     )
@@ -117,22 +121,19 @@ async def health() -> dict:
         "registry_version": _state.registry.version,
         "warm_embeddings": len(_state.registry_embeddings),
         "embedder": type(_state.embedder).__name__ if _state.embedder else None,
+        "verifier": type(_state.verifier).__name__ if _state.verifier else None,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
 @app.post("/detect", response_model=Decision)
 async def detect(req: DetectRequest) -> Decision:
-    """Live Layer 1 + Layer 2 cascade.
+    """Full 3-layer cascade.
 
     Flow:
-      1. Resolve registry: req.registry if provided, else daemon default.
-      2. Resolve embeddings: precomputed for daemon's registry; warm on
-         the fly for per-call registry overrides (Day-5 multi-agent path).
-      3. Layer 1 — exact match -> ALLOW (early return).
-      4. Layer 2 — cosine + fusion -> AUTO_CORRECT | SUGGEST | BLOCK.
-      5. Broadcast Decision to SSE subscribers.
-      6. structlog audit line.
+      1. Resolve registry + embeddings (per-call override or daemon default).
+      2. Hand off to cascade.detect() which runs L1 -> L2 -> (maybe L3).
+      3. Broadcast Decision to SSE subscribers + structlog audit.
     """
     request_start = time.perf_counter()
     assert _state.embedder is not None, "embedder must be initialised at startup"
@@ -147,35 +148,37 @@ async def detect(req: DetectRequest) -> Decision:
         registry = _state.registry
         embeddings = _state.registry_embeddings
 
-    # Layer 1 — exact match short-circuit
-    decision = layer1(req.tool_name, registry)
-    if decision is not None:
-        log.debug(
-            "tool_allowed",
-            session_id=req.session_id,
-            tool=req.tool_name,
-            l1_ms=decision.layer_breakdown.l1_ms,
-        )
-        _broadcast(decision)
-        return decision
-
-    # Layer 2 — embedding + fusion. NEVER returns ALLOW; always one of
-    # AUTO_CORRECT / SUGGEST / BLOCK.
-    decision = layer2(req, registry, _state.embedder, embeddings)
+    decision = cascade_detect(
+        req,
+        registry,
+        _state.embedder,
+        embeddings,
+        verifier=_state.verifier,
+    )
 
     total_elapsed_ms = (time.perf_counter() - request_start) * 1000.0
-    log.warning(
-        "phantom_intercepted",
+
+    # Audit log. ALLOW gets a debug line, anything else gets warning
+    # (those are the "interesting" events the dashboard timeline displays).
+    log_method = log.debug if decision.verdict == "ALLOW" else log.warning
+    log_method(
+        "cascade_decision",
         session_id=req.session_id,
         tool=req.tool_name,
-        registered_count=len(registry.tools),
         verdict=decision.verdict,
         confidence=round(decision.confidence, 3),
         suggested=decision.suggestion.tool_name if decision.suggestion else None,
-        agent_content_present=req.agent_content is not None,
         degraded=decision.degraded,
+        l1_ms=round(decision.layer_breakdown.l1_ms, 3),
         l2_ms=round(decision.layer_breakdown.l2_ms, 3),
+        l3_ms=(
+            round(decision.layer_breakdown.l3_ms, 3)
+            if decision.layer_breakdown.l3_ms is not None
+            else None
+        ),
         total_ms=round(total_elapsed_ms, 3),
+        registered_count=len(registry.tools),
+        agent_content_present=req.agent_content is not None,
     )
 
     _broadcast(decision)

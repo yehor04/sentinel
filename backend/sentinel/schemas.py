@@ -52,8 +52,16 @@ class Tool(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    name: Annotated[str, Field(min_length=1, description="Canonical tool name as agent sees it.")]
-    description: str = Field(default="", description="Human-readable purpose; consumed by Layer 2 embedding.")
+    name: Annotated[str, Field(min_length=1, max_length=200, description="Canonical tool name as agent sees it.")]
+    description: str = Field(
+        default="",
+        max_length=2000,
+        description=(
+            "Human-readable purpose; consumed by Layer 2 embedding. Bounded to "
+            "2000 chars so a misconfigured/malicious registry can't blow up the "
+            "embedding signature length or Gemini's prompt size."
+        ),
+    )
     required_args: tuple[str, ...] = Field(default=(), description="Required argument keys for F2 Jaccard heuristic.")
     optional_args: tuple[str, ...] = Field(default=(), description="Optional argument keys.")
 
@@ -122,7 +130,13 @@ class DetectRequest(BaseModel):
     ]
     tool_input: dict = Field(
         default_factory=dict,
-        description="Arguments the agent passed; consumed by F2 schema-key Jaccard heuristic.",
+        max_length=64,
+        description=(
+            "Arguments the agent passed; consumed by F2 schema-key Jaccard heuristic. "
+            "Bounded to 64 keys: real tool calls have well under 20 args, and the cap "
+            "protects against DOS payloads that would blow up the Layer-3 Gemini prompt "
+            "(unbounded dict -> unbounded json.dumps -> Gemini context overflow + $ burn)."
+        ),
     )
     session_id: str = Field(default="default", description="Stable agent-session id; groups traces in dashboard.")
     agent_reasoning: str | None = Field(

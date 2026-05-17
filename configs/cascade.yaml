@@ -53,8 +53,13 @@ embedding:
   gemini_model: text-embedding-004
 
   # On-disk LRU cache for embeddings. Survives daemon restarts; keyed by
-  # (provider, model, text). Default location ~/.sentinel/embed-cache/.
-  cache_dir: ~/.sentinel/embed-cache
+  # (provider, model, text). Default points at /var/sentinel/ because the
+  # production container runs as non-root `sentinel` (uid 10001) with
+  # --no-create-home — so $HOME (/home/sentinel) is NOT writable. The named
+  # docker volume sentinel-data mounts at /var/sentinel/ already chowned
+  # sentinel:sentinel (Dockerfile.backend), so the cache survives container
+  # rebuilds. Override with SENTINEL_EMBED_CACHE for local dev.
+  cache_dir: /var/sentinel/embed-cache
   cache_size_mb: 512
 
   # httpx timeout in seconds. Below this, fall back to gemini OR escalate.

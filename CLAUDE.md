@@ -156,7 +156,7 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 |---|---|---|---|
 | Day 1 | 2026-05-13 → 05-15 | ✅ Done | Scaffold + Vultr deploy live at https://sentinel.66-245-207-218.nip.io |
 | Day 2 | 2026-05-15 → 05-16 | ✅ **Complete & Deployed to Milan** | Schemas + Layer 1 + heuristics (T014–T025) + config-driven thresholds + structlog audit + 🔴 red security fixes |
-| Day 3 | 2026-05-17 | ⏳ Pending | Layer 2 + Layer 3 + latency gate (T026–T036) |
+| Day 3 | 2026-05-15 → 05-17 | 🟡 **Mostly Done (local)** | T026–T033 + T036 shipped (cascade live locally, v0.3.1-day3-cascade); T034 bench + T035 latency-gate + Vultr deploy moved to Day 4 |
 | Day 4 | 2026-05-18 | ⏳ Pending | Dashboard + benchmark + Pareto chart (T037–T050) |
 | Day 5 | 2026-05-19 | ⏳ Pending | Hardening + demo prep + (stretch) MCP middleware (T051–T060) |
 | Day 6 | 2026-05-20 | ⏳ Pending | Demo video + submit (T061–T066) |
