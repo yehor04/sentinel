@@ -55,11 +55,28 @@ embedding:
   # documentation; switch back if Featherless ever ships /v1/embeddings.
   featherless_model: BAAI/bge-small-en-v1.5
 
-  # Gemini gemini-embedding-001: native 3072-dim, truncated to 768 via
-  # the SDK's output_dimensionality knob for memory + downstream-dim parity.
-  # This is the current production-supported embedding model on v1beta
-  # (verified via `genai.list_models()` against our key on 2026-05-17;
-  # text-embedding-004 and embedding-001 both 404 there). Free tier 1500 RPM.
+  # Gemini gemini-embedding-001: measured better than gemini-embedding-2 on
+  # our specific phantom-tool corpus. Side-by-side on the canonical demo
+  # phantom 'search_the_internet':
+  #
+  #   model                     | cosine→web_search | L2 latency
+  #   gemini-embedding-001      | 0.86              | 267 ms
+  #   gemini-embedding-2        | 0.84              | 1614 ms  (6× slower)
+  #
+  # Counter-intuitive: gemini-embedding-2 is the newer generation, but on
+  # short tool-name signatures (5-30 chars) -001 produces SLIGHTLY tighter
+  # cosines and is dramatically faster. -2 may shine on longer documents
+  # (it has more capacity, 768-dim was a truncation of native 3072), but
+  # for our short-text use case the extra capacity is wasted and we pay
+  # the latency cost.
+  #
+  # Available alternatives on v1beta (verified via genai.list_models()):
+  #   - gemini-embedding-001        (current default)
+  #   - gemini-embedding-2          (slower, ~equivalent quality on our corpus)
+  #   - gemini-embedding-2-preview  (cutting-edge, can change without notice)
+  #
+  # Re-evaluate this choice after T035 latency-gate benchmark on a larger
+  # phantom corpus (SentinelBench-v1).
   gemini_model: gemini-embedding-001
 
   # On-disk LRU cache for embeddings. Survives daemon restarts; keyed by
