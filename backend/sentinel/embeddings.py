@@ -134,7 +134,17 @@ class FeatherlessEmbedder:
             log.warning("featherless_embed_failed", error=str(e), text_len=len(text))
             raise EmbeddingError(f"Featherless embed failed: {e}") from e
 
-        body = resp.json()
+        # M1 defensive parse: a 200 response with malformed JSON body
+        # (Cloudflare interstitial, truncated stream, etc.) would otherwise
+        # propagate JSONDecodeError past the cascade. Wrap here so the only
+        # error type that ever leaves this layer is EmbeddingError.
+        try:
+            body = resp.json()
+        except (ValueError, UnicodeDecodeError) as e:
+            raise EmbeddingError(
+                f"Featherless returned 200 with non-JSON body: {e}"
+            ) from e
+
         try:
             vec: list[float] = body["data"][0]["embedding"]
         except (KeyError, IndexError, TypeError) as e:
