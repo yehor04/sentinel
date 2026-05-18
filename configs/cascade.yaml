@@ -100,8 +100,10 @@ verifier:
   # GEMINI_API_KEY is missing.
   provider: gemini
 
-  # Gemini Flash 2.5 — chosen for the latency budget: ~300ms median P50,
-  # ~500ms p95. Cheaper than Pro by ~7x. Tuned to JSON structured output.
+  # gemini-2.5-flash — restored after switching from google.generativeai SDK
+  # to direct httpx REST calls on 2026-05-18. The deprecated SDK caused 504
+  # DeadlineExceeded on all Flash models from the Vultr Milan node; the REST
+  # API works cleanly. 2.5-flash gives the best reasoning quality for L3.
   gemini_model: gemini-2.5-flash
 
   # Structured-output strictness. Temperature 0 keeps the verifier
@@ -110,8 +112,10 @@ verifier:
 
   # Hard timeout in seconds. On timeout the cascade falls back to the
   # Layer 2 decision with degraded=True; the agent still gets a Decision.
-  timeout_s: 2.0
+  # 8.0s gives gemini-2.0-flash comfortable headroom (P95 ~2s on free tier).
+  timeout_s: 8.0
 
   # Cap on the verifier's output to bound cost. The Decision schema also
-  # caps `reason` at 240 chars, so 512 tokens is generous.
-  max_output_tokens: 512
+  # caps `reason` at 240 chars. 1024 gives headroom since gemini-2.5-flash
+  # with thinkingBudget=0 outputs the JSON directly without thinking preamble.
+  max_output_tokens: 1024

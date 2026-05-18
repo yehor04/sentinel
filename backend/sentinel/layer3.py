@@ -93,7 +93,15 @@ class LLMClient(Protocol):
 
 
 class GeminiClient:
-    """Thin wrapper over `google.generativeai` for Gemini Flash structured output."""
+    """Gemini Flash structured-output client via direct REST API (httpx).
+
+    The google.generativeai SDK is deprecated (FutureWarning since 2026-Q1)
+    and causes server-side 504 DeadlineExceeded errors for newer Flash models
+    (2.5-flash thinking mode + old SDK endpoint incompatibility). Using the
+    REST API directly is more reliable and gives us full timeout control.
+    """
+
+    _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
     def __init__(
         self,
@@ -106,28 +114,39 @@ class GeminiClient:
     ) -> None:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is empty; cannot init GeminiClient.")
-        # Lazy import: tests that exclusively use StubVerifier don't need
-        # google-generativeai installed.
-        import google.generativeai as genai
+        import httpx as _httpx  # local import: keep module importable without httpx in tests
 
-        genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel(model)
+        self._httpx = _httpx
+        self.api_key = api_key
         self.model_name = model
         self.timeout_s = timeout_s
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
 
     def generate(self, prompt: str) -> str:
-        response = self._model.generate_content(
-            prompt,
-            generation_config={
+        url = f"{self._BASE_URL}/{self.model_name}:generateContent"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
                 "response_mime_type": "application/json",
                 "temperature": self.temperature,
-                "max_output_tokens": self.max_output_tokens,
+                "maxOutputTokens": self.max_output_tokens,
+                # Disable thinking mode on gemini-2.5-flash: thinking tokens
+                # consume the token budget before the JSON output completes,
+                # causing truncated responses. thinkingBudget=0 gives direct
+                # structured output at ~300ms instead of ~2.7s with thinking.
+                "thinkingConfig": {"thinkingBudget": 0},
             },
-            request_options={"timeout": self.timeout_s},
+        }
+        resp = self._httpx.post(
+            url,
+            json=payload,
+            params={"key": self.api_key},
+            timeout=self.timeout_s,
         )
-        return response.text  # type: ignore[no-any-return]
+        resp.raise_for_status()
+        data = resp.json()
+        return str(data["candidates"][0]["content"]["parts"][0]["text"])
 
 
 # ----------------------------------------------------------------------------
