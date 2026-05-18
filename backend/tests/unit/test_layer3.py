@@ -34,6 +34,8 @@ from sentinel.layer3 import (
     Verifier,
     VerifierResponse,
     VerifierSuggestion,
+    _normalize_gemini_data,
+    _strip_fences,
     get_verifier,
     layer3,
     reset_verifier_cache,
@@ -262,6 +264,95 @@ def test_reason_over_240_chars_returns_none() -> None:
     registry = _two_tool_registry()
     response = verifier.verify(_phantom_req(), registry, _top_candidates(registry))
     assert response is None
+
+
+# ============================================================================
+# Gemini quirk guards — extra fields + markdown fences + empty suggestion
+# ============================================================================
+
+
+def test_extra_fields_are_tolerated() -> None:
+    """gemini-2.5-flash appends 'explanation' / 'chain_of_thought' — must not fail."""
+    canned = json.dumps(
+        {
+            "verdict": "AUTO_CORRECT",
+            "confidence": 0.92,
+            "reason": "Tool 'search_the_internet' not in registry. Use 'web_search'.",
+            "suggestion": {"tool_name": "web_search", "rationale": "top-1 semantic match"},
+            "explanation": "I chose web_search because it is the closest semantic match.",
+            "chain_of_thought": "Step 1: ...",
+        }
+    )
+    verifier = GeminiFlashVerifier(client=MockLLMClient([canned]))
+    registry = _two_tool_registry()
+    response = verifier.verify(_phantom_req(), registry, _top_candidates(registry))
+
+    assert response is not None
+    assert response.verdict == "AUTO_CORRECT"
+    assert response.confidence == 0.92
+
+
+def test_markdown_fences_are_stripped() -> None:
+    """Gemini sometimes wraps JSON in ```json ... ``` despite application/json."""
+    inner = json.dumps(
+        {
+            "verdict": "BLOCK",
+            "confidence": 0.88,
+            "reason": "No plausible match. Revise your plan.",
+            "suggestion": None,
+        }
+    )
+    fenced = f"```json\n{inner}\n```"
+    verifier = GeminiFlashVerifier(client=MockLLMClient([fenced]))
+    registry = _two_tool_registry()
+    response = verifier.verify(_phantom_req(), registry, _top_candidates(registry))
+
+    assert response is not None
+    assert response.verdict == "BLOCK"
+
+
+def test_empty_suggestion_object_is_normalized_to_none() -> None:
+    """Gemini returns suggestion: {} instead of null — must be treated as None."""
+    canned = json.dumps(
+        {
+            "verdict": "BLOCK",
+            "confidence": 0.88,
+            "reason": "No plausible match. Revise your plan.",
+            "suggestion": {},
+        }
+    )
+    verifier = GeminiFlashVerifier(client=MockLLMClient([canned]))
+    registry = _two_tool_registry()
+    response = verifier.verify(_phantom_req(), registry, _top_candidates(registry))
+
+    assert response is not None
+    assert response.suggestion is None
+
+
+def test_strip_fences_plain_json_unchanged() -> None:
+    assert _strip_fences('{"a": 1}') == '{"a": 1}'
+
+
+def test_strip_fences_with_json_fence() -> None:
+    raw = "```json\n{\"a\": 1}\n```"
+    assert _strip_fences(raw) == '{"a": 1}'
+
+
+def test_strip_fences_with_plain_fence() -> None:
+    raw = "```\n{\"a\": 1}\n```"
+    assert _strip_fences(raw) == '{"a": 1}'
+
+
+def test_normalize_gemini_data_converts_empty_suggestion() -> None:
+    data = {"verdict": "BLOCK", "suggestion": {}}
+    result = _normalize_gemini_data(data)
+    assert isinstance(result, dict) and result["suggestion"] is None
+
+
+def test_normalize_gemini_data_leaves_valid_suggestion_alone() -> None:
+    data = {"suggestion": {"tool_name": "web_search", "rationale": "top-1"}}
+    result = _normalize_gemini_data(data)
+    assert isinstance(result, dict) and result["suggestion"] == {"tool_name": "web_search", "rationale": "top-1"}
 
 
 # ============================================================================

@@ -156,8 +156,8 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 |---|---|---|---|
 | Day 1 | 2026-05-13 → 05-15 | ✅ Done | Scaffold + Vultr deploy live at https://sentinel.66-245-207-218.nip.io |
 | Day 2 | 2026-05-15 → 05-16 | ✅ **Complete & Deployed to Milan** | Schemas + Layer 1 + heuristics (T014–T025) + config-driven thresholds + structlog audit + 🔴 red security fixes |
-| Day 3 | 2026-05-15 → 05-17 | 🟡 **Mostly Done (local)** | T026–T033 + T036 shipped (cascade live locally, v0.3.1-day3-cascade); T034 bench + T035 latency-gate + Vultr deploy moved to Day 4 |
-| Day 4 | 2026-05-18 | ⏳ Pending | Dashboard + benchmark + Pareto chart (T037–T050) |
+| Day 3 | 2026-05-15 → 05-17 | ✅ **Complete & Deployed** | T026–T033 + T036 shipped; cascade live on Vultr with real Gemini embedding-001 + Gemini Flash verifier (v0.3.1-day3-cascade); env_file durability fix; docker-compose loads .env automatically; gemini-embedding-001 vs -2 measured (~0.86 vs 0.84 cosine, 6× latency difference, doc'd in cascade.yaml) |
+| Day 4 | 2026-05-18 | ⏳ Pending | Pending: T034 benchmark + T035 latency-gate + L3 schema-failure debug (verifier returns degraded=True today) + dashboard scaffold (T037–T041) |
 | Day 5 | 2026-05-19 | ⏳ Pending | Hardening + demo prep + (stretch) MCP middleware (T051–T060) |
 | Day 6 | 2026-05-20 | ⏳ Pending | Demo video + submit (T061–T066) |
 
@@ -169,9 +169,12 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 - **Code on VM:** `/opt/sentinel/` (rsynced from local, `--exclude='.env'`)
 - **Secrets:** `/opt/sentinel/.env` mode **0600** (root-only)
 - **Containers:** `sentinel-backend` (FastAPI, real Layer 1, runs as **non-root `sentinel`** uid 10001) + `sentinel-caddy` (reverse proxy)
-- **Live latency:** `l1_ms = 0.0023ms` measured over public HTTPS (200× under the 0.5ms budget)
-- **Audit log:** structlog JSON — `daemon_startup`, `phantom_intercepted` events
-- **Persistence dir:** `/var/sentinel/` (sentinel-data volume, owned by `sentinel:sentinel`; SQLite write lands Day 3+)
+- **Live latency:** L1 `0.0024ms`, L2 `0.31ms` (cache-hit), L3 `~1.5s` (Gemini Flash inference)
+- **Audit log:** structlog JSON — `daemon_startup`, `cascade_decision` events (per-layer ms in payload)
+- **Persistence dir:** `/var/sentinel/` (sentinel-data volume, owned by `sentinel:sentinel`; also holds embed-cache disk-LRU)
+- **Embedder:** `GeminiEmbedder` using `gemini-embedding-001` @ 768-dim (output_dimensionality truncation from native 3072). Compared to `gemini-embedding-2`: -001 wins on both quality and latency for short tool-name signatures — see `configs/cascade.yaml` for the measured numbers.
+- **Verifier:** `GeminiFlashVerifier` using `gemini-2.5-flash`. Currently surfaces `degraded=True` on L3 path because Gemini's response fails our schema validation — Day-4 debug task.
+- **env handling:** `docker-compose.yml` uses `env_file: ../.env`, so `docker compose up` auto-loads keys without needing `set -a; source .env; set +a` first.
 - **Config:** all thresholds + fusion weights load from `configs/cascade.yaml` at startup (Constitution V — no magic floats in source)
 
 ## Swarm / multi-agent scope (held thought, 2026-05-16)

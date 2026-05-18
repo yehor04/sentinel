@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Phantom tool-call detector with self-correction for autonomous LLM agents."
 authors = [{ name = "Yehor Larcenko" }]
 license = "Apache-2.0"
-readme = "../README.md"
+readme = "README.md"
 requires-python = ">=3.11"
 
 dependencies = [

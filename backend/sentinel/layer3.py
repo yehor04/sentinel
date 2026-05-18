@@ -48,7 +48,10 @@ log = structlog.get_logger("sentinel.layer3")
 class VerifierSuggestion(BaseModel):
     """A proposed replacement tool from Layer 3's verdict."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    # extra="ignore": Gemini 2.5-flash sometimes appends meta fields
+    # (e.g. "confidence_note", "alternative"). We only care about the
+    # two required fields; silently drop extras rather than hard-rejecting.
+    model_config = ConfigDict(extra="ignore", frozen=True)
 
     tool_name: Annotated[str, Field(min_length=1)]
     rationale: Annotated[str, Field(max_length=240)]
@@ -63,7 +66,10 @@ class VerifierResponse(BaseModel):
     Decision invariants when constructing the final response.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    # extra="ignore": gemini-2.5-flash appends extra keys in its structured
+    # JSON output (observed: "explanation", "chain_of_thought", "thinking").
+    # We validate the 4 fields we care about and discard the rest.
+    model_config = ConfigDict(extra="ignore", frozen=True)
 
     verdict: Verdict
     confidence: Annotated[float, Field(ge=0.0, le=1.0)]
@@ -190,6 +196,38 @@ Do NOT include markdown code fences in the response.
 """
 
 
+def _strip_fences(raw: str) -> str:
+    """Remove markdown code fences Gemini may emit despite application/json.
+
+    Gemini 2.5-flash occasionally wraps its JSON in ```json ... ``` blocks
+    even when response_mime_type="application/json" is set. This guard
+    strips the fences before json.loads so the verifier doesn't fail on
+    what is otherwise a valid JSON payload.
+    """
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        first_newline = stripped.find("\n")
+        if first_newline != -1:
+            stripped = stripped[first_newline + 1 :]
+        if stripped.endswith("```"):
+            stripped = stripped[:-3].rstrip()
+    return stripped
+
+
+def _normalize_gemini_data(data: object) -> object:
+    """Pre-validation normalization for known Gemini response quirks.
+
+    - `suggestion: {}` (empty object) → `null`: Gemini sometimes returns an
+      empty object instead of null when no suggestion applies. Pydantic would
+      fail to parse it because `tool_name` and `rationale` are required.
+    """
+    if not isinstance(data, dict):
+        return data
+    if data.get("suggestion") == {}:
+        return {**data, "suggestion": None}
+    return data
+
+
 class GeminiFlashVerifier:
     """Gemini Flash-backed Layer 3 verifier.
 
@@ -215,16 +253,28 @@ class GeminiFlashVerifier:
             log.warning("layer3_transport_failed", error=str(e), error_type=type(e).__name__)
             return None
 
+        cleaned = _strip_fences(raw)
+
         try:
-            data = json.loads(raw)
+            data = json.loads(cleaned)
         except json.JSONDecodeError as e:
-            log.warning("layer3_json_parse_failed", error=str(e), raw_head=raw[:120] if raw else "")
+            log.warning(
+                "layer3_json_parse_failed",
+                error=str(e),
+                raw_head=raw[:400] if raw else "",
+            )
             return None
+
+        data = _normalize_gemini_data(data)
 
         try:
             response = VerifierResponse.model_validate(data)
         except ValidationError as e:
-            log.warning("layer3_schema_violation", error=str(e), raw_head=raw[:120] if raw else "")
+            log.warning(
+                "layer3_schema_violation",
+                error=str(e),
+                raw_head=raw[:400] if raw else "",
+            )
             return None
 
         # Anti-injection guard: ALLOW is exclusively Layer 1's verdict. A Layer 3

@@ -1,0 +1,25 @@
+{
+  "tools": [
+    {"name": "Bash", "description": "Execute shell commands in the terminal", "required_args": ["command"]},
+    {"name": "Read", "description": "Read a file from the local filesystem", "required_args": ["file_path"]},
+    {"name": "Write", "description": "Write content to a file on the local filesystem", "required_args": ["file_path", "content"]},
+    {"name": "Edit", "description": "Edit a file with precise string replacement", "required_args": ["file_path", "old_string", "new_string"]},
+    {"name": "Glob", "description": "Find files matching a glob pattern", "required_args": ["pattern"]},
+    {"name": "Grep", "description": "Search for patterns in files using regex", "required_args": ["pattern"]},
+    {"name": "Task", "description": "Launch a sub-agent to handle a complex task", "required_args": ["description", "prompt"]},
+    {"name": "WebFetch", "description": "Fetch content from a URL", "required_args": ["url"]},
+    {"name": "WebSearch", "description": "Search the web for information", "required_args": ["query"]},
+    {"name": "mcp__github__create_pull_request", "description": "Create a GitHub pull request", "required_args": ["title", "body"]},
+    {"name": "mcp__github__get_file_contents", "description": "Get file contents from a GitHub repository", "required_args": ["path"]},
+    {"name": "mcp__github__list_issues", "description": "List issues in a GitHub repository", "required_args": []},
+    {"name": "mcp__slack__send_message", "description": "Send a message to a Slack channel", "required_args": ["channel", "text"]},
+    {"name": "mcp__memory__search", "description": "Search the memory knowledge graph", "required_args": ["query"]},
+    {"name": "mcp__memory__add", "description": "Add an observation to the memory knowledge graph", "required_args": ["content"]},
+    {"name": "mcp__postgres__query", "description": "Execute a SQL query against the PostgreSQL database", "required_args": ["sql"]},
+    {"name": "computer_use", "description": "Control the computer GUI via screenshots and actions", "required_args": ["action"]},
+    {"name": "str_replace_editor", "description": "Edit files using string replacement operations", "required_args": ["path", "old_str", "new_str"]},
+    {"name": "think", "description": "Think through a problem step by step before acting", "required_args": ["thought"]},
+    {"name": "mcp__linear__create_issue", "description": "Create an issue in Linear project management", "required_args": ["title"]}
+  ],
+  "version": "bench-v1"
+}
