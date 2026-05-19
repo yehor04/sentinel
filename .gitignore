@@ -50,3 +50,4 @@ deploy/caddy-config/
 
 # --- Claude Code agent folder (per spec-kit security note) ---
 .claude/.credentials
+!results/BENCHMARKS.md
