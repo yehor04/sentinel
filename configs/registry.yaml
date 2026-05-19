@@ -1,26 +1,121 @@
-# Sentinel demo tool registry — Day 2 baseline.
+# Sentinel demo tool registry — Day 4 expanded (20 tools).
 #
-# This is the active tool set the daemon checks against on every /detect
-# call. For the live demo (T061) we'll expand to ~20 tools matching the
-# Claude Code surface (Read, Edit, Bash, Glob, Grep, ...) plus mock MCP
-# entries (mcp__lint_check, mcp__test_runner). Today we ship the two tools
-# referenced by the canonical demo bait + the evidence corpus:
-#
-#   - `web_search` — present in the Featherless bait JSON
-#   - `mcp__lint_check` — the AUTO_CORRECT target named in main.py's mock
-#
-# Edit this file freely; daemon reloads on next startup. Layer 2 embedding
-# cache invalidates whenever `version` changes.
+# Full Claude Code built-in surface + common MCP tools.
+# Layer 2 embedding cache invalidates on version bump.
 
-version: "0.1.0-day2"
+version: "0.2.0-day4"
 
 tools:
-  - name: web_search
-    description: Search the web for information; returns titles + snippets + URLs.
+  # ── Claude Code built-ins ──────────────────────────────────────────────────
+
+  - name: Bash
+    description: Execute shell commands in a sandboxed terminal session. Use for running scripts, build commands, tests, git operations, and file system operations.
+    required_args: [command]
+    optional_args: [timeout, description]
+
+  - name: Read
+    description: Read the contents of a file from the local filesystem. Returns the file content with line numbers.
+    required_args: [file_path]
+    optional_args: [offset, limit]
+
+  - name: Write
+    description: Write content to a new file on the local filesystem. Creates the file and any necessary parent directories.
+    required_args: [file_path, content]
+    optional_args: []
+
+  - name: Edit
+    description: Make precise string replacements in an existing file. Replaces old_string with new_string exactly once.
+    required_args: [file_path, old_string, new_string]
+    optional_args: [replace_all]
+
+  - name: Glob
+    description: Find files matching a glob pattern in the current working directory. Returns matching file paths.
+    required_args: [pattern]
+    optional_args: [path]
+
+  - name: Grep
+    description: Search for a regex pattern across files in the codebase. Returns matching lines with file and line number context.
+    required_args: [pattern]
+    optional_args: [path, include, exclude, output_mode]
+
+  - name: Task
+    description: Launch a subagent to handle a complex multi-step task in parallel. Returns when the subagent completes.
+    required_args: [description, prompt]
+    optional_args: [subagent_type]
+
+  - name: WebFetch
+    description: Fetch the content of a URL and return it as text. Handles HTML, JSON, and plain text responses.
+    required_args: [url]
+    optional_args: [prompt]
+
+  - name: WebSearch
+    description: Search the web for current information and return a list of results with titles, URLs, and snippets.
     required_args: [query]
-    optional_args: [num_results, time_range]
+    optional_args: [num_results]
+
+  # ── MCP — GitHub ──────────────────────────────────────────────────────────
+
+  - name: mcp__github__create_pull_request
+    description: Create a new GitHub pull request with a title, body, base branch, and head branch.
+    required_args: [title, body]
+    optional_args: [base, head, draft]
+
+  - name: mcp__github__get_file_contents
+    description: Retrieve the raw contents of a file from a GitHub repository at a specific ref.
+    required_args: [path]
+    optional_args: [repo, ref]
+
+  - name: mcp__github__list_issues
+    description: List open or closed issues for a GitHub repository, with optional label and assignee filters.
+    required_args: []
+    optional_args: [state, labels, assignee, limit]
+
+  - name: mcp__github__create_issue
+    description: Create a new issue in a GitHub repository with a title, body, and optional labels.
+    required_args: [title]
+    optional_args: [body, labels, assignees]
+
+  - name: mcp__github__push_files
+    description: Push one or more file changes to a GitHub repository in a single commit.
+    required_args: [files, message]
+    optional_args: [branch]
+
+  # ── MCP — Slack ───────────────────────────────────────────────────────────
+
+  - name: mcp__slack__send_message
+    description: Send a text message to a Slack channel or direct message thread.
+    required_args: [channel, text]
+    optional_args: [thread_ts, blocks]
+
+  # ── MCP — Database ────────────────────────────────────────────────────────
+
+  - name: mcp__postgres__query
+    description: Execute a read-only SQL query against the PostgreSQL database and return rows as JSON.
+    required_args: [sql]
+    optional_args: [limit]
+
+  # ── MCP — Memory ──────────────────────────────────────────────────────────
+
+  - name: mcp__memory__search
+    description: Semantic search over the persistent knowledge graph memory store.
+    required_args: [query]
+    optional_args: [limit]
+
+  - name: mcp__memory__add
+    description: Add a new observation or fact to the persistent knowledge graph memory store.
+    required_args: [content]
+    optional_args: []
+
+  # ── MCP — Code quality ────────────────────────────────────────────────────
 
   - name: mcp__lint_check
-    description: Run a static-analysis lint pass over the given file or directory.
+    description: Run a static-analysis lint pass over a file or directory; returns violations with line numbers.
     required_args: [file]
     optional_args: [strict, ruleset]
+
+  # ── MCP — Linear ──────────────────────────────────────────────────────────
+
+  - name: mcp__linear__create_issue
+    description: Create a new issue in a Linear project with a title, description, and optional priority.
+    required_args: [title]
+    optional_args: [description, priority, assignee_id, team_id]
