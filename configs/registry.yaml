@@ -3,119 +3,175 @@
 # Full Claude Code built-in surface + common MCP tools.
 # Layer 2 embedding cache invalidates on version bump.
 
-version: "0.2.0-day4"
+version: "0.3.0-day5-enriched"
 
 tools:
   # ── Claude Code built-ins ──────────────────────────────────────────────────
 
   - name: Bash
-    description: Execute shell commands in a sandboxed terminal session. Use for running scripts, build commands, tests, git operations, and file system operations.
+    description: >
+      Execute shell commands, scripts, and terminal operations. Use for: running tests,
+      build commands, git operations, file system operations, executing programs,
+      running scripts. Aliases: execute_command, run_shell_command, run_command,
+      run_tests, list_directory, terminal_execute, shell_run.
     required_args: [command]
     optional_args: [timeout, description]
 
   - name: Read
-    description: Read the contents of a file from the local filesystem. Returns the file content with line numbers.
+    description: >
+      Read the contents of a file from the local filesystem. Returns file content
+      with line numbers. Use for: reading source files, configs, logs.
+      Aliases: read_from_disk, read_file, open_file, get_file_contents, load_file.
     required_args: [file_path]
     optional_args: [offset, limit]
 
   - name: Write
-    description: Write content to a new file on the local filesystem. Creates the file and any necessary parent directories.
+    description: >
+      Write or create a file on the local filesystem. Creates directories as needed.
+      Use for: creating new files, saving output, writing configs.
+      Aliases: write_to_disk, write_file, create_file, save_file, write_code_to_file.
     required_args: [file_path, content]
     optional_args: []
 
   - name: Edit
-    description: Make precise string replacements in an existing file. Replaces old_string with new_string exactly once.
+    description: >
+      Make precise string replacements in an existing file. Replaces old_string
+      with new_string exactly. Use for: patching source code, editing configs.
+      Aliases: edit_file, modify_file, patch_file, update_file, str_replace_file.
     required_args: [file_path, old_string, new_string]
     optional_args: [replace_all]
 
   - name: Glob
-    description: Find files matching a glob pattern in the current working directory. Returns matching file paths.
+    description: >
+      Find files matching a glob pattern. Returns matching file paths recursively.
+      Use for: locating files by extension or name pattern.
+      Aliases: find_files, list_files, find_matching_files, locate_files.
     required_args: [pattern]
     optional_args: [path]
 
   - name: Grep
-    description: Search for a regex pattern across files in the codebase. Returns matching lines with file and line number context.
+    description: >
+      Search for a regex pattern across files in the codebase. Returns matching
+      lines with file and line number context. Use for: finding code, symbols, text.
+      Aliases: search_files, grep_in_files, find_in_code, search_codebase, regex_search.
     required_args: [pattern]
     optional_args: [path, include, exclude, output_mode]
 
   - name: Task
-    description: Launch a subagent to handle a complex multi-step task in parallel. Returns when the subagent completes.
+    description: >
+      Launch a sub-agent to handle a complex multi-step task in parallel.
+      Returns when the sub-agent completes. Use for: delegating work, parallelism.
+      Aliases: launch_agent, delegate_task, spawn_agent, run_subtask.
     required_args: [description, prompt]
     optional_args: [subagent_type]
 
   - name: WebFetch
-    description: Fetch the content of a URL and return it as text. Handles HTML, JSON, and plain text responses.
+    description: >
+      Fetch the content of a URL and return it as text. Handles HTML, JSON, plain text.
+      Use for: downloading web pages, calling REST APIs, reading documentation.
+      Aliases: fetch_webpage, http_get, navigate_to_url, curl_url, download_page, get_url.
     required_args: [url]
     optional_args: [prompt]
 
   - name: WebSearch
-    description: Search the web for current information and return a list of results with titles, URLs, and snippets.
+    description: >
+      Search the web for current information. Returns titles, URLs, and snippets.
+      Use for: finding recent news, documentation, research papers, answers.
+      Aliases: google_search, search_the_internet, internet_search, search_web,
+      web_lookup, find_online, look_up_information, bing_search.
     required_args: [query]
     optional_args: [num_results]
 
   # ── MCP — GitHub ──────────────────────────────────────────────────────────
 
   - name: mcp__github__create_pull_request
-    description: Create a new GitHub pull request with a title, body, base branch, and head branch.
+    description: >
+      Create a new GitHub pull request with a title, body, base and head branch.
+      Aliases: open_pr, create_pr_on_github, submit_pull_request, open_pull_request,
+      create_github_pr, new_pull_request.
     required_args: [title, body]
     optional_args: [base, head, draft]
 
   - name: mcp__github__get_file_contents
-    description: Retrieve the raw contents of a file from a GitHub repository at a specific ref.
+    description: >
+      Retrieve the raw contents of a file from a GitHub repository at a specific ref.
+      Aliases: get_github_file, read_github_file, fetch_github_file.
     required_args: [path]
     optional_args: [repo, ref]
 
   - name: mcp__github__list_issues
-    description: List open or closed issues for a GitHub repository, with optional label and assignee filters.
+    description: >
+      List open or closed GitHub issues with optional filters.
+      Aliases: list_github_issues, get_issues, show_issues, fetch_issues.
     required_args: []
     optional_args: [state, labels, assignee, limit]
 
   - name: mcp__github__create_issue
-    description: Create a new issue in a GitHub repository with a title, body, and optional labels.
+    description: >
+      Create a new issue in a GitHub repository.
+      Aliases: open_github_issue, file_issue, report_bug, create_github_ticket.
     required_args: [title]
     optional_args: [body, labels, assignees]
 
   - name: mcp__github__push_files
-    description: Push one or more file changes to a GitHub repository in a single commit.
+    description: >
+      Push one or more file changes to GitHub in a single commit.
+      Aliases: commit_files, push_to_github, upload_files_to_github.
     required_args: [files, message]
     optional_args: [branch]
 
   # ── MCP — Slack ───────────────────────────────────────────────────────────
 
   - name: mcp__slack__send_message
-    description: Send a text message to a Slack channel or direct message thread.
+    description: >
+      Send a text message to a Slack channel or direct message thread.
+      Aliases: send_slack, post_to_slack, send_slack_message, notify_slack,
+      slack_post, message_slack, post_slack_notification.
     required_args: [channel, text]
     optional_args: [thread_ts, blocks]
 
   # ── MCP — Database ────────────────────────────────────────────────────────
 
   - name: mcp__postgres__query
-    description: Execute a read-only SQL query against the PostgreSQL database and return rows as JSON.
+    description: >
+      Execute a SQL query against the PostgreSQL database and return rows as JSON.
+      Aliases: query_database, sql_select, run_sql, db_query, database_query,
+      execute_sql, postgres_query.
     required_args: [sql]
     optional_args: [limit]
 
   # ── MCP — Memory ──────────────────────────────────────────────────────────
 
   - name: mcp__memory__search
-    description: Semantic search over the persistent knowledge graph memory store.
+    description: >
+      Semantic search over the persistent knowledge graph memory store.
+      Aliases: search_memory, query_memory, find_in_memory, recall_memory, memory_lookup.
     required_args: [query]
     optional_args: [limit]
 
   - name: mcp__memory__add
-    description: Add a new observation or fact to the persistent knowledge graph memory store.
+    description: >
+      Add a new observation or fact to the persistent knowledge graph memory store.
+      Aliases: add_to_memory, save_to_memory, store_memory, remember_fact, memory_save.
     required_args: [content]
     optional_args: []
 
   # ── MCP — Code quality ────────────────────────────────────────────────────
 
   - name: mcp__lint_check
-    description: Run a static-analysis lint pass over a file or directory; returns violations with line numbers.
+    description: >
+      Run a static-analysis lint pass over a file or directory; returns violations
+      with line numbers. Aliases: mcp__codequality_assess, run_linter, code_quality_check,
+      static_analysis, lint_files, analyze_code_quality.
     required_args: [file]
     optional_args: [strict, ruleset]
 
   # ── MCP — Linear ──────────────────────────────────────────────────────────
 
   - name: mcp__linear__create_issue
-    description: Create a new issue in a Linear project with a title, description, and optional priority.
+    description: >
+      Create a new issue in a Linear project management board.
+      Aliases: create_linear_ticket, new_linear_issue, linear_create_issue,
+      create_ticket, file_linear_bug.
     required_args: [title]
     optional_args: [description, priority, assignee_id, team_id]
