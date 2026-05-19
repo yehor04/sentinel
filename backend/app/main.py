@@ -1,10 +1,9 @@
-"""Sentinel FastAPI daemon — Day 3 final wiring (cascade live).
+"""Sentinel FastAPI daemon — 3-layer phantom tool-call detection cascade.
 
-Day 1 mocked /detect, Day 2 wired live Layer 1, Day 3 (this revision)
-wires the full 3-layer cascade through `cascade.detect()`. The daemon
-loads registry + embedder + verifier at startup, warms registry
-embeddings once, then every /detect call runs the orchestrator that
-strings L1 → L2 → (optional L3) and produces a schema-valid Decision.
+Loads registry + embedder + verifier at startup, warms registry embeddings
+once, then every /detect call runs the cascade: L1 (registry exact match)
+→ L2 (embedding similarity + F1/F2/F3 fusion) → L3 (Gemini Flash verifier).
+Broadcasts decisions via SSE to the live dashboard.
 
 Run locally: `uvicorn backend.app.main:app --host 0.0.0.0 --port 7777`
 """

@@ -48,6 +48,8 @@ results/*
 deploy/caddy-data/
 deploy/caddy-config/
 
-# --- Claude Code agent folder (per spec-kit security note) ---
-.claude/.credentials
+# --- Claude Code / internal planning (not for public repo) ---
+.claude/
+.specify/
+specs/
 !results/BENCHMARKS.md
