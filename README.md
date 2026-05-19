@@ -60,11 +60,14 @@ Agent tool call
 
 ## Quick start
 
+**Prerequisites:** Python 3.11+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Docker (optional, for deploy path).
+
 ```bash
 git clone https://github.com/yehor04/sentinel
 cd sentinel
-make install        # installs hook to ~/.local/bin/sentinel-hook
-make dev            # daemon on localhost:7777
+cp .env.example .env        # then set GEMINI_API_KEY in .env
+make install                # installs hook to ~/.local/bin/sentinel-hook
+make dev                    # daemon on localhost:7777
 ```
 
 Add to `~/.claude/settings.json`:
@@ -79,18 +82,18 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-Or hit the live public endpoint directly:
+Or hit the live public endpoint directly — no setup needed:
 ```bash
 curl -X POST https://sentinel.66-245-207-218.nip.io/detect \
   -H "Content-Type: application/json" \
   -d '{"tool_name": "search_the_internet", "tool_input": {"query": "test"}}'
 ```
 
-### Configure
+### Docker deploy
 
 ```bash
-cp .env.example .env
-# Set GEMINI_API_KEY
+cp .env.example .env        # set GEMINI_API_KEY and SENTINEL_DOMAIN
+cd deploy && docker compose up -d
 ```
 
 All thresholds live in [`configs/cascade.yaml`](configs/cascade.yaml) — no magic numbers in source.
