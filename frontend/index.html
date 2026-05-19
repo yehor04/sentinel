@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentinel — Phantom Tool Guard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0d1117; font-family: 'SF Mono', 'Fira Code', monospace; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .pulse { animation: pulse-dot 1.5s ease-in-out infinite; }
+    @keyframes slide-in { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+    .slide-in { animation: slide-in 0.25s ease-out; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #161b22; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+  </style>
+</head>
+<body class="min-h-screen text-gray-200">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="text-red-400 text-xl font-bold tracking-widest">⬡ SENTINEL</div>
+      <span class="text-gray-600 text-xs">phantom tool guard</span>
+    </div>
+    <div class="flex items-center gap-6">
+      <div id="status" class="flex items-center gap-2 text-xs text-gray-500">
+        <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-600"></span>
+        <span id="status-text">connecting…</span>
+      </div>
+      <a href="https://sentinel.66-245-207-218.nip.io/health" target="_blank"
+         class="text-xs text-gray-600 hover:text-gray-400 transition-colors">/health</a>
+    </div>
+  </header>
+
+  <!-- Stats bar -->
+  <div class="border-b border-gray-800 px-6 py-3 flex gap-8">
+    <div class="text-center">
+      <div id="stat-total" class="text-2xl font-bold text-gray-100">0</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider mt-0.5">total calls</div>
+    </div>
+    <div class="text-center">
+      <div id="stat-phantoms" class="text-2xl font-bold text-orange-400">0</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider mt-0.5">phantoms caught</div>
+    </div>
+    <div class="text-center">
+      <div id="stat-ac" class="text-2xl font-bold text-emerald-400">0</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider mt-0.5">auto-corrected</div>
+    </div>
+    <div class="text-center">
+      <div id="stat-suggest" class="text-2xl font-bold text-blue-400">0</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider mt-0.5">suggested</div>
+    </div>
+    <div class="text-center">
+      <div id="stat-block" class="text-2xl font-bold text-red-400">0</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider mt-0.5">blocked</div>
+    </div>
+    <div class="text-center">
+      <div id="stat-conf" class="text-2xl font-bold text-purple-400">—</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider mt-0.5">avg confidence</div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="px-6 py-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-xs text-gray-500 uppercase tracking-wider">Live Decision Feed</h2>
+      <span class="text-xs text-gray-600">last 50 calls · newest first</span>
+    </div>
+
+    <!-- Table header -->
+    <div class="grid text-xs text-gray-500 uppercase tracking-wider px-3 pb-2 border-b border-gray-800"
+         style="grid-template-columns: 140px 1fr 160px 80px 70px 70px 50px">
+      <span>verdict</span>
+      <span>tool name</span>
+      <span>correction</span>
+      <span>confidence</span>
+      <span>l2 ms</span>
+      <span>l3 ms</span>
+      <span>deg</span>
+    </div>
+
+    <!-- Rows -->
+    <div id="feed" class="divide-y divide-gray-800/50 overflow-y-auto" style="max-height: calc(100vh - 260px)">
+      <div class="text-center text-gray-600 text-sm py-16" id="empty-state">
+        Waiting for first detection call…
+        <div class="mt-2 text-xs text-gray-700">
+          Try: <code class="text-gray-500">curl -X POST https://sentinel.66-245-207-218.nip.io/detect -H "Content-Type: application/json" -d '{"tool_name":"search_the_internet","tool_input":{}}'</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const VERDICT_STYLES = {
+      ALLOW:        { badge: 'bg-gray-800 text-gray-400 border border-gray-700', dot: '#6b7280' },
+      AUTO_CORRECT: { badge: 'bg-emerald-900/60 text-emerald-300 border border-emerald-800', dot: '#34d399' },
+      SUGGEST:      { badge: 'bg-blue-900/60 text-blue-300 border border-blue-800', dot: '#60a5fa' },
+      BLOCK:        { badge: 'bg-red-900/60 text-red-300 border border-red-800', dot: '#f87171' },
+    };
+
+    let rows = [];
+    let stats = { total: 0, phantoms: 0, auto_correct: 0, suggest: 0, block: 0, avg_confidence: 0 };
+
+    function fmt(n) { return n == null ? '—' : Number(n).toFixed(1); }
+    function confColor(c) {
+      if (c >= 0.85) return 'text-emerald-400';
+      if (c >= 0.60) return 'text-yellow-400';
+      return 'text-red-400';
+    }
+
+    function renderRow(d) {
+      const vs = VERDICT_STYLES[d.verdict] || VERDICT_STYLES.BLOCK;
+      const correction = d.suggestion ? d.suggestion.tool_name : '—';
+      const l3 = d.layer_breakdown?.l3_ms;
+      const l3str = l3 != null ? fmt(l3) : '—';
+      const deg = d.degraded ? '<span class="text-orange-400">⚠</span>' : '<span class="text-gray-700">✓</span>';
+      const conf = typeof d.confidence === 'number' ? d.confidence : 0;
+      return `
+        <div class="grid items-center px-3 py-2.5 hover:bg-gray-900/40 transition-colors slide-in text-xs"
+             style="grid-template-columns: 140px 1fr 160px 80px 70px 70px 50px">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${vs.dot}"></span>
+            <span class="px-1.5 py-0.5 rounded text-xs font-medium ${vs.badge}">${d.verdict}</span>
+          </span>
+          <span class="text-gray-300 truncate pr-4 font-mono">${d.tool_name || '?'}</span>
+          <span class="text-gray-400 truncate pr-4 font-mono">${correction}</span>
+          <span class="${confColor(conf)}">${(conf * 100).toFixed(0)}%</span>
+          <span class="text-gray-500">${fmt(d.layer_breakdown?.l2_ms)}</span>
+          <span class="text-gray-500">${l3str}</span>
+          <span>${deg}</span>
+        </div>`;
+    }
+
+    function updateStats(s) {
+      document.getElementById('stat-total').textContent = s.total;
+      document.getElementById('stat-phantoms').textContent = s.phantoms;
+      document.getElementById('stat-ac').textContent = s.auto_correct;
+      document.getElementById('stat-suggest').textContent = s.suggest;
+      document.getElementById('stat-block').textContent = s.block;
+      document.getElementById('stat-conf').textContent = s.avg_confidence > 0
+        ? (s.avg_confidence * 100).toFixed(0) + '%' : '—';
+    }
+
+    function setStatus(live) {
+      const dot = document.getElementById('status-dot');
+      const txt = document.getElementById('status-text');
+      if (live) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 pulse';
+        txt.textContent = 'live';
+        txt.className = 'text-xs text-emerald-400';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-red-500';
+        txt.textContent = 'reconnecting…';
+        txt.className = 'text-xs text-red-400';
+      }
+    }
+
+    function renderFeed() {
+      const feed = document.getElementById('feed');
+      const empty = document.getElementById('empty-state');
+      if (rows.length === 0) { if (empty) empty.style.display = ''; return; }
+      if (empty) empty.style.display = 'none';
+      feed.innerHTML = rows.slice(0, 50).map(renderRow).join('');
+    }
+
+    // Poll /history every 2s for full stats + backfill
+    async function pollHistory() {
+      try {
+        const r = await fetch('/history?limit=50');
+        if (!r.ok) return;
+        const data = await r.json();
+        updateStats(data.stats);
+        // Only replace rows if SSE isn't running (backfill on load)
+        if (rows.length === 0 && data.decisions.length > 0) {
+          rows = data.decisions;
+          renderFeed();
+        }
+      } catch (_) {}
+    }
+
+    // SSE for real-time updates
+    function connectSSE() {
+      const es = new EventSource('/events');
+      es.onopen = () => setStatus(true);
+      es.onerror = () => {
+        setStatus(false);
+        es.close();
+        setTimeout(connectSSE, 3000);
+      };
+      es.onmessage = (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          if (!d.verdict) return; // heartbeat comment
+          rows.unshift(d);
+          if (rows.length > 200) rows.pop();
+          renderFeed();
+          pollHistory(); // refresh stats
+        } catch (_) {}
+      };
+    }
+
+    pollHistory();
+    setInterval(pollHistory, 3000);
+    connectSSE();
+  </script>
+</body>
+</html>

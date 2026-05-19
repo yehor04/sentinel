@@ -12,15 +12,18 @@ Run locally: `uvicorn backend.app.main:app --host 0.0.0.0 --port 7777`
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 import os
 import time
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from sentinel import (
     Decision,
@@ -72,6 +75,7 @@ class _State:
         self.verifier: Verifier | None = None
         self.registry_embeddings: dict[str, list[float]] = {}
         self.event_subscribers: list[asyncio.Queue[Decision]] = []
+        self.history: collections.deque[dict] = collections.deque(maxlen=200)
 
 
 _state = _State()
@@ -181,17 +185,47 @@ async def detect(req: DetectRequest) -> Decision:
         agent_content_present=req.agent_content is not None,
     )
 
-    _broadcast(decision)
+    _broadcast(decision, req)
     return decision
 
 
-def _broadcast(decision: Decision) -> None:
+def _broadcast(decision: Decision, req: DetectRequest) -> None:
     """Fan-out a Decision to all SSE subscribers; never blocks /detect."""
+    record = {
+        **decision.model_dump(),
+        "tool_name": req.tool_name,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    _state.history.append(record)
     for q in _state.event_subscribers:
         try:
             q.put_nowait(decision)
         except asyncio.QueueFull:
             pass  # slow subscriber: drop, don't block the cascade
+
+
+@app.get("/history")
+async def history(limit: int = 50) -> dict:
+    """Recent decisions for the dashboard — newest first."""
+    items = list(_state.history)[-limit:][::-1]
+    total = len(_state.history)
+    phantoms = sum(1 for r in _state.history if r["verdict"] != "ALLOW")
+    auto_correct = sum(1 for r in _state.history if r["verdict"] == "AUTO_CORRECT")
+    block = sum(1 for r in _state.history if r["verdict"] == "BLOCK")
+    suggest = sum(1 for r in _state.history if r["verdict"] == "SUGGEST")
+    confs = [r["confidence"] for r in _state.history if r["verdict"] != "ALLOW"]
+    avg_conf = round(sum(confs) / len(confs), 3) if confs else 0.0
+    return {
+        "stats": {
+            "total": total,
+            "phantoms": phantoms,
+            "auto_correct": auto_correct,
+            "suggest": suggest,
+            "block": block,
+            "avg_confidence": avg_conf,
+        },
+        "decisions": items,
+    }
 
 
 @app.get("/events")
@@ -217,6 +251,12 @@ async def events() -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# Serve dashboard HTML — mount AFTER all API routes so /detect etc. take priority
+_frontend_dir = Path(__file__).parent.parent.parent / "frontend"
+if _frontend_dir.is_dir():
+    app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
 
 
 if __name__ == "__main__":

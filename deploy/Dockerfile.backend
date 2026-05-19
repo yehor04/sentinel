@@ -37,9 +37,10 @@ RUN groupadd --system --gid 10001 sentinel \
     && mkdir -p /var/sentinel \
     && chown -R sentinel:sentinel /var/sentinel /app
 
-# Copy app + configs. Done AFTER user creation so chown can cover the COPY.
+# Copy app + configs + dashboard. Done AFTER user creation so chown covers all.
 COPY --chown=sentinel:sentinel backend/ ./backend/
 COPY --chown=sentinel:sentinel configs/ ./configs/
+COPY --chown=sentinel:sentinel frontend/ ./frontend/
 
 USER sentinel
 
