@@ -144,7 +144,7 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 ## Sprint state (current)
 
 **Hackathon:** AI Agent Olympics, Milan AI Week 2026
-**Window:** 2026-05-13 → 2026-05-20 (8 calendar days; today is 2026-05-15)
+**Window:** 2026-05-13 → 2026-05-20 (8 calendar days; today is 2026-05-19)
 **Submission deadline:** 2026-05-20 20:00 CET (submit 8h before as buffer)
 **Mode:** Solo developer
 **Stack lock-in date:** 2026-05-14
@@ -155,27 +155,28 @@ make smoke-vultr       # curl public URL, assert /health and /detect respond
 | Day | Date | Status | Outcome |
 |---|---|---|---|
 | Day 1 | 2026-05-13 → 05-15 | ✅ Done | Scaffold + Vultr deploy live at https://sentinel.66-245-207-218.nip.io |
-| Day 2 | 2026-05-15 → 05-16 | ✅ **Complete & Deployed to Milan** | Schemas + Layer 1 + heuristics (T014–T025) + config-driven thresholds + structlog audit + 🔴 red security fixes |
-| Day 3 | 2026-05-15 → 05-17 | ✅ **Complete & Deployed** | T026–T033 + T036 shipped; cascade live on Vultr with real Gemini embedding-001 + Gemini Flash verifier (v0.3.1-day3-cascade); env_file durability fix; docker-compose loads .env automatically; gemini-embedding-001 vs -2 measured (~0.86 vs 0.84 cosine, 6× latency difference, doc'd in cascade.yaml) |
-| Day 4 | 2026-05-18 | ⏳ Pending | Pending: T034 benchmark + T035 latency-gate + L3 schema-failure debug (verifier returns degraded=True today) + dashboard scaffold (T037–T041) |
-| Day 5 | 2026-05-19 | ⏳ Pending | Hardening + demo prep + (stretch) MCP middleware (T051–T060) |
-| Day 6 | 2026-05-20 | ⏳ Pending | Demo video + submit (T061–T066) |
+| Day 2 | 2026-05-15 → 05-16 | ✅ **Complete & Deployed** | Schemas + Layer 1 + heuristics (T014–T025) + config-driven thresholds + structlog audit + security hardening |
+| Day 3 | 2026-05-16 → 05-17 | ✅ **Complete & Deployed** | T026–T033 + T036; full cascade live (L1+L2+L3); gemini-embedding-001 (768-dim); GeminiFlashVerifier wired |
+| Day 4 | 2026-05-18 → 05-19 | ✅ **Complete & Deployed** | T034+T035 done; L3 fully fixed (degraded=false live); dashboard live; registry expanded to 20 tools; security review + all CRITICAL/HIGH fixed |
+| Day 5 | 2026-05-19 | 🔄 In progress | Demo prep, docs update, submission |
+| Day 6 | 2026-05-20 | ⏳ Pending | Tag v0.1.0-hackathon-submission + submit (T061–T066) |
 
 ### Production deployment
 
 - **Public URL:** https://sentinel.66-245-207-218.nip.io
-- **VM:** Vultr Milan, vx1-g-2c-8g, 66.245.207.218, **SSH key-only** (PasswordAuthentication no, PermitRootLogin prohibit-password)
+- **Dashboard:** https://sentinel.66-245-207-218.nip.io (dark-theme live feed, SSE-powered)
+- **VM:** Vultr Milan, vx1-g-2c-8g, 66.245.207.218, **SSH key-only**
 - **TLS:** Let's Encrypt via Caddy auto-ACME
-- **Code on VM:** `/opt/sentinel/` (rsynced from local, `--exclude='.env'`)
+- **Code on VM:** `/opt/sentinel/` (rsynced; not a git repo — `rsync --exclude='.env'`)
 - **Secrets:** `/opt/sentinel/.env` mode **0600** (root-only)
-- **Containers:** `sentinel-backend` (FastAPI, real Layer 1, runs as **non-root `sentinel`** uid 10001) + `sentinel-caddy` (reverse proxy)
-- **Live latency:** L1 `0.0024ms`, L2 `0.31ms` (cache-hit), L3 `~1.5s` (Gemini Flash inference)
-- **Audit log:** structlog JSON — `daemon_startup`, `cascade_decision` events (per-layer ms in payload)
-- **Persistence dir:** `/var/sentinel/` (sentinel-data volume, owned by `sentinel:sentinel`; also holds embed-cache disk-LRU)
-- **Embedder:** `GeminiEmbedder` using `gemini-embedding-001` @ 768-dim (output_dimensionality truncation from native 3072). Compared to `gemini-embedding-2`: -001 wins on both quality and latency for short tool-name signatures — see `configs/cascade.yaml` for the measured numbers.
-- **Verifier:** `GeminiFlashVerifier` using `gemini-2.5-flash`. Currently surfaces `degraded=True` on L3 path because Gemini's response fails our schema validation — Day-4 debug task.
-- **env handling:** `docker-compose.yml` uses `env_file: ../.env`, so `docker compose up` auto-loads keys without needing `set -a; source .env; set +a` first.
-- **Config:** all thresholds + fusion weights load from `configs/cascade.yaml` at startup (Constitution V — no magic floats in source)
+- **Containers:** `sentinel-backend` (FastAPI, non-root `sentinel` uid 10001) + `sentinel-caddy`
+- **Live latency:** L1 `0.002ms`, L2 `0.31ms` (cache-hit), L3 `~2.3s` (Gemini 2.5-flash, thinkingBudget=0)
+- **Registry:** 20 tools (`configs/registry.yaml` v0.2.0-day4) — Claude Code builtins + MCP surface
+- **Embedder:** `GeminiEmbedder` using `gemini-embedding-001` @ 768-dim
+- **Verifier:** `GeminiFlashVerifier` using `gemini-2.5-flash` via direct **httpx REST** (not SDK). `degraded=False` confirmed live.
+- **L3 fixes applied (Day 4):** `extra="ignore"` on VerifierResponse; `_strip_fences()`; `_normalize_gemini_data()`; httpx REST replaces deprecated SDK; `thinkingBudget=0` disables thinking truncation
+- **Security:** API key in header (not URL); XSS-escaped dashboard; SSE capped at 50; CSP headers; 64KB body limit
+- **Config:** all thresholds in `configs/cascade.yaml` (Constitution V)
 
 ## Swarm / multi-agent scope (held thought, 2026-05-16)
 
