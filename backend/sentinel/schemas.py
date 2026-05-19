@@ -138,7 +138,12 @@ class DetectRequest(BaseModel):
             "(unbounded dict -> unbounded json.dumps -> Gemini context overflow + $ burn)."
         ),
     )
-    session_id: str = Field(default="default", description="Stable agent-session id; groups traces in dashboard.")
+    session_id: str = Field(
+        default="default",
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
+        description="Stable agent-session id; groups traces in dashboard.",
+    )
     agent_reasoning: str | None = Field(
         default=None,
         max_length=4096,

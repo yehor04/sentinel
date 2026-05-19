@@ -93,6 +93,12 @@
   </div>
 
   <script>
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     const VERDICT_STYLES = {
       ALLOW:        { badge: 'bg-gray-800 text-gray-400 border border-gray-700', dot: '#6b7280' },
       AUTO_CORRECT: { badge: 'bg-emerald-900/60 text-emerald-300 border border-emerald-800', dot: '#34d399' },
@@ -112,7 +118,7 @@
 
     function renderRow(d) {
       const vs = VERDICT_STYLES[d.verdict] || VERDICT_STYLES.BLOCK;
-      const correction = d.suggestion ? d.suggestion.tool_name : '—';
+      const correction = d.suggestion ? esc(d.suggestion.tool_name) : '—';
       const l3 = d.layer_breakdown?.l3_ms;
       const l3str = l3 != null ? fmt(l3) : '—';
       const deg = d.degraded ? '<span class="text-orange-400">⚠</span>' : '<span class="text-gray-700">✓</span>';
@@ -122,9 +128,9 @@
              style="grid-template-columns: 140px 1fr 160px 80px 70px 70px 50px">
           <span class="inline-flex items-center gap-1.5">
             <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${vs.dot}"></span>
-            <span class="px-1.5 py-0.5 rounded text-xs font-medium ${vs.badge}">${d.verdict}</span>
+            <span class="px-1.5 py-0.5 rounded text-xs font-medium ${vs.badge}">${esc(d.verdict)}</span>
           </span>
-          <span class="text-gray-300 truncate pr-4 font-mono">${d.tool_name || '?'}</span>
+          <span class="text-gray-300 truncate pr-4 font-mono">${esc(d.tool_name) || '?'}</span>
           <span class="text-gray-400 truncate pr-4 font-mono">${correction}</span>
           <span class="${confColor(conf)}">${(conf * 100).toFixed(0)}%</span>
           <span class="text-gray-500">${fmt(d.layer_breakdown?.l2_ms)}</span>

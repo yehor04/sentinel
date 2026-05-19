@@ -4,6 +4,20 @@
 {$SENTINEL_DOMAIN} {
     encode gzip zstd
 
+    # Security headers
+    header {
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        Content-Security-Policy "default-src 'self'; script-src 'self' https://cdn.tailwindcss.com; connect-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com"
+        -Server
+    }
+
+    # Bound request body size to prevent memory exhaustion
+    request_body {
+        max_size 64KB
+    }
+
     # SSE events stream — flush_interval -1 disables buffering for live dashboard
     handle /events {
         reverse_proxy backend:7777 {

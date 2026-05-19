@@ -21,8 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import structlog
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, Query
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from sentinel import (
@@ -189,23 +189,28 @@ async def detect(req: DetectRequest) -> Decision:
     return decision
 
 
+_MAX_SSE_SUBSCRIBERS = 50
+
+
 def _broadcast(decision: Decision, req: DetectRequest) -> None:
     """Fan-out a Decision to all SSE subscribers; never blocks /detect."""
+    import json as _json
     record = {
         **decision.model_dump(),
         "tool_name": req.tool_name,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     _state.history.append(record)
+    record_json = _json.dumps(record)
     for q in _state.event_subscribers:
         try:
-            q.put_nowait(decision)
+            q.put_nowait(record_json)
         except asyncio.QueueFull:
             pass  # slow subscriber: drop, don't block the cascade
 
 
 @app.get("/history")
-async def history(limit: int = 50) -> dict:
+async def history(limit: int = Query(default=50, ge=1, le=200)) -> dict:
     """Recent decisions for the dashboard — newest first."""
     items = list(_state.history)[-limit:][::-1]
     total = len(_state.history)
@@ -231,15 +236,19 @@ async def history(limit: int = 50) -> dict:
 @app.get("/events")
 async def events() -> StreamingResponse:
     """Server-Sent Events stream of every Decision. Dashboard subscribes here."""
-    queue: asyncio.Queue[Decision] = asyncio.Queue(maxsize=128)
+    if len(_state.event_subscribers) >= _MAX_SSE_SUBSCRIBERS:
+        from fastapi.responses import Response
+        return Response(status_code=503, content="SSE subscriber limit reached")  # type: ignore[return-value]
+
+    queue: asyncio.Queue[str] = asyncio.Queue(maxsize=128)
     _state.event_subscribers.append(queue)
 
     async def stream() -> AsyncGenerator[str, None]:
         try:
             yield ": sentinel stream open\n\n"
             while True:
-                decision = await queue.get()
-                yield f"data: {decision.model_dump_json()}\n\n"
+                record_json = await queue.get()
+                yield f"data: {record_json}\n\n"
         finally:
             try:
                 _state.event_subscribers.remove(queue)

@@ -116,8 +116,12 @@ class GeminiClient:
             raise ValueError("GEMINI_API_KEY is empty; cannot init GeminiClient.")
         import httpx as _httpx  # local import: keep module importable without httpx in tests
 
-        self._httpx = _httpx
-        self.api_key = api_key
+        # Key goes in header, NOT in query params — query-param keys appear in
+        # httpx HTTPStatusError.__str__() and would leak into structlog on any 4xx/5xx.
+        self._client = _httpx.Client(
+            headers={"x-goog-api-key": api_key},
+            timeout=timeout_s,
+        )
         self.model_name = model
         self.timeout_s = timeout_s
         self.temperature = temperature
@@ -138,12 +142,7 @@ class GeminiClient:
                 "thinkingConfig": {"thinkingBudget": 0},
             },
         }
-        resp = self._httpx.post(
-            url,
-            json=payload,
-            params={"key": self.api_key},
-            timeout=self.timeout_s,
-        )
+        resp = self._client.post(url, json=payload)
         resp.raise_for_status()
         data = resp.json()
         return str(data["candidates"][0]["content"]["parts"][0]["text"])
