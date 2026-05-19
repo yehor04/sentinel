@@ -26,9 +26,14 @@
         reverse_proxy backend:7777
     }
 
-    # Catch-all: minimal landing page until Day-4 Next.js dashboard lands
+    # /history endpoint for dashboard stats
+    handle /history {
+        reverse_proxy backend:7777
+    }
+
+    # Dashboard + all other paths → FastAPI (serves frontend/index.html via StaticFiles)
     handle {
-        respond "Sentinel is live. Dashboard ships Day 4." 200
+        reverse_proxy backend:7777
     }
 
     log {
