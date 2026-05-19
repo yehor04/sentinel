@@ -20,6 +20,7 @@ from sentinel.embeddings import (
     Embedder,
     EmbeddingError,
     FeatherlessEmbedder,
+    SemanticStubEmbedder,
     StubEmbedder,
     get_embedder,
     reset_embedder_cache,
@@ -206,19 +207,19 @@ def test_get_embedder_falls_back_to_stub_when_no_api_key(monkeypatch) -> None:
     assert len(vec) > 0
 
 
-def test_get_embedder_returns_stub_on_explicit_stub_provider(monkeypatch) -> None:
+def test_get_embedder_returns_semantic_stub_on_explicit_stub_provider(monkeypatch) -> None:
     monkeypatch.setenv("SENTINEL_EMBED_PROVIDER", "stub")
     reset_embedder_cache()
     emb = get_embedder()
-    assert isinstance(emb, StubEmbedder)
+    assert isinstance(emb, SemanticStubEmbedder)
 
 
-def test_get_embedder_returns_stub_on_unknown_provider(monkeypatch) -> None:
-    """Unknown provider strings shouldn't crash; safe-fallback to stub."""
+def test_get_embedder_returns_semantic_stub_on_unknown_provider(monkeypatch) -> None:
+    """Unknown provider strings shouldn't crash; safe-fallback to SemanticStubEmbedder."""
     monkeypatch.setenv("SENTINEL_EMBED_PROVIDER", "nonexistent-cloud")
     reset_embedder_cache()
     emb = get_embedder()
-    assert isinstance(emb, StubEmbedder)
+    assert isinstance(emb, SemanticStubEmbedder)
 
 
 def test_get_embedder_is_singleton(monkeypatch) -> None:
